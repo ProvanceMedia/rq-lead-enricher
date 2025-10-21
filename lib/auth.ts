@@ -30,10 +30,19 @@ function createEmailTransporter() {
 }
 
 let authOptionsCache: NextAuthOptions | null = null;
+let isBuildPhase = process.env.SKIP_ENV_VALIDATION === "true";
 
 function getAuthOptions(): NextAuthOptions {
-  if (authOptionsCache) {
+  // Don't use cache if we're transitioning from build to runtime
+  const currentlyInBuild = process.env.SKIP_ENV_VALIDATION === "true";
+  if (authOptionsCache && isBuildPhase === currentlyInBuild) {
     return authOptionsCache;
+  }
+
+  // Clear cache if transitioning from build to runtime
+  if (isBuildPhase && !currentlyInBuild) {
+    authOptionsCache = null;
+    isBuildPhase = false;
   }
 
   const env = getServerEnv();
@@ -120,22 +129,37 @@ function getAuthOptions(): NextAuthOptions {
   return authOptionsCache;
 }
 
-// Lazy-load authOptions at runtime to avoid empty object from build phase
+// Export function instead of object to ensure runtime evaluation
 export function getAuthOptionsRuntime(): NextAuthOptions {
-  if (process.env.SKIP_ENV_VALIDATION === "true") {
-    return {} as NextAuthOptions;
-  }
   return getAuthOptions();
 }
 
-// For backward compatibility, export as authOptions
+// Lazy evaluation - don't initialize during build
+let _authOptions: NextAuthOptions | null = null;
+
+export function getAuthOptionsExport(): NextAuthOptions {
+  if (!_authOptions) {
+    _authOptions = getAuthOptions();
+  }
+  return _authOptions;
+}
+
+// For backward compatibility with existing imports
 export const authOptions = new Proxy({} as NextAuthOptions, {
   get(_target, prop) {
-    const opts = getAuthOptionsRuntime();
-    return opts[prop as keyof NextAuthOptions];
+    return getAuthOptionsExport()[prop as keyof NextAuthOptions];
+  },
+  has(_target, prop) {
+    return prop in getAuthOptionsExport();
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getAuthOptionsExport());
+  },
+  getOwnPropertyDescriptor(_target, prop) {
+    return Reflect.getOwnPropertyDescriptor(getAuthOptionsExport(), prop);
   }
 });
 
 export function auth() {
-  return getServerSession(getAuthOptionsRuntime());
+  return getServerSession(getAuthOptionsExport());
 }
