@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "SKIP_ENV_VALIDATION=true next build",
-    "start": "next start",
+    "build": "SKIP_ENV_VALIDATION=true next build && npm run prisma:generate",
+    "start": "prisma migrate deploy && next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
