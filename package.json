@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "SKIP_ENV_VALIDATION=true next build && npm run prisma:generate",
-    "start": "prisma migrate deploy && next start",
+    "start": "prisma db push --accept-data-loss && next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
