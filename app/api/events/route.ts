@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { EventType } from "@prisma/client";
+import { EventType, Prisma } from "@prisma/client";
 import { parseISO } from "date-fns";
 
 import { auth } from "@/lib/auth";
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const to = searchParams.get("to") ?? undefined;
   const classification = searchParams.get("classification") ?? undefined;
 
-  const where: Parameters<typeof prisma.event.findMany>[0]["where"] = {};
+  const where: Prisma.EventWhereInput = {};
 
   if (type) {
     if (Object.values(EventType).includes(type as EventType)) {
