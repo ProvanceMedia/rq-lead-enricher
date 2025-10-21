@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { EventType } from "@prisma/client";
+import { EventType, Prisma } from "@prisma/client";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { ActivityFilters } from "@/components/activity/activity-filters";
@@ -32,7 +32,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     redirect("/auth/sign-in");
   }
 
-  const where: Parameters<typeof prisma.event.findMany>[0]["where"] = {};
+  const where: Prisma.EventWhereInput = {};
 
   if (searchParams?.status) {
     where.type = searchParams.status as EventType;
