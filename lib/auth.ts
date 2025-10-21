@@ -54,27 +54,37 @@ function getAuthOptions(): NextAuthOptions {
     ],
     callbacks: {
       async signIn({ user, account }) {
-        const { ALLOWED_EMAIL_DOMAIN } = env;
-        if (!user.email?.endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) {
-          return false;
-        }
+        try {
+          const { ALLOWED_EMAIL_DOMAIN } = env;
+          if (!user.email?.endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) {
+            console.log('[Auth] Sign-in rejected: email domain mismatch:', user.email);
+            return false;
+          }
 
-        // Create or update user in database on sign-in
-        if (user.email) {
-          await prisma.user.upsert({
-            where: { email: user.email },
-            update: {
-              name: user.name
-            },
-            create: {
-              email: user.email,
-              name: user.name,
-              role: Role.read_only
-            }
-          });
-        }
+          // Create or update user in database on sign-in
+          if (user.email) {
+            console.log('[Auth] Creating/updating user:', user.email);
+            await prisma.user.upsert({
+              where: { email: user.email },
+              update: {
+                name: user.name
+              },
+              create: {
+                email: user.email,
+                name: user.name,
+                role: Role.read_only
+              }
+            });
+            console.log('[Auth] User created/updated successfully');
+          }
 
-        return true;
+          return true;
+        } catch (error) {
+          console.error('[Auth] Sign-in callback error:', error);
+          // Allow sign-in to continue even if user creation fails
+          // The JWT will still work, just won't have DB record
+          return true;
+        }
       },
       async session({ token, session }) {
         if (token.sub) {
@@ -89,30 +99,45 @@ function getAuthOptions(): NextAuthOptions {
         return session;
       },
       async jwt({ token, user, account }) {
-        // Initial sign in
-        if (user && user.email) {
-          // Get user from database to get their role
-          const dbUser = await prisma.user.findUnique({
-            where: { email: user.email },
-            select: { id: true, role: true }
-          });
+        try {
+          // Initial sign in
+          if (user && user.email) {
+            console.log('[Auth] JWT: Looking up user in database:', user.email);
+            // Get user from database to get their role
+            const dbUser = await prisma.user.findUnique({
+              where: { email: user.email },
+              select: { id: true, role: true }
+            });
 
-          if (dbUser) {
-            token.sub = dbUser.id;
-            token.role = dbUser.role;
+            if (dbUser) {
+              console.log('[Auth] JWT: User found, role:', dbUser.role);
+              token.sub = dbUser.id;
+              token.role = dbUser.role;
+            } else {
+              console.log('[Auth] JWT: User not found in DB, using defaults');
+              token.role = Role.read_only;
+            }
           }
-        }
 
-        // Refresh role from database if not in token
-        if (!token.role && token.email) {
-          const dbUser = await prisma.user.findUnique({
-            where: { email: token.email as string },
-            select: { role: true }
-          });
-          token.role = dbUser?.role ?? Role.read_only;
-        }
+          // Refresh role from database if not in token
+          if (!token.role && token.email) {
+            console.log('[Auth] JWT: Refreshing role for:', token.email);
+            const dbUser = await prisma.user.findUnique({
+              where: { email: token.email as string },
+              select: { role: true }
+            });
+            token.role = dbUser?.role ?? Role.read_only;
+          }
 
-        return token;
+          return token;
+        } catch (error) {
+          console.error('[Auth] JWT callback error:', error);
+          // Return token with default role if database fails
+          if (!token.role) {
+            token.role = Role.read_only;
+          }
+          return token;
+        }
       }
     }
   };
