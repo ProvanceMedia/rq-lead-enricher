@@ -120,12 +120,22 @@ function getAuthOptions(): NextAuthOptions {
   return authOptionsCache;
 }
 
-// Only initialize authOptions at runtime, not during build
-export const authOptions =
-  process.env.SKIP_ENV_VALIDATION === "true"
-    ? ({} as NextAuthOptions)
-    : getAuthOptions();
+// Lazy-load authOptions at runtime to avoid empty object from build phase
+export function getAuthOptionsRuntime(): NextAuthOptions {
+  if (process.env.SKIP_ENV_VALIDATION === "true") {
+    return {} as NextAuthOptions;
+  }
+  return getAuthOptions();
+}
+
+// For backward compatibility, export as authOptions
+export const authOptions = new Proxy({} as NextAuthOptions, {
+  get(_target, prop) {
+    const opts = getAuthOptionsRuntime();
+    return opts[prop as keyof NextAuthOptions];
+  }
+});
 
 export function auth() {
-  return getServerSession(authOptions);
+  return getServerSession(getAuthOptionsRuntime());
 }
