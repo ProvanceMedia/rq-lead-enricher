@@ -129,7 +129,12 @@ async function setup() {
   }
 
   console.log('Connecting to database...');
-  const client = new Client({ connectionString });
+  const client = new Client({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
 
   try {
     await client.connect();
