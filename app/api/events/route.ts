@@ -6,6 +6,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return NextResponse.json({ events: [] });
+  }
+
   const session = await auth();
 
   if (!session) {

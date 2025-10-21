@@ -4,6 +4,15 @@ import { prisma } from "@/lib/prisma";
 import { connection } from "@/lib/queue";
 
 export async function GET() {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return NextResponse.json({
+      ok: true,
+      db: false,
+      redis: false,
+      note: "Skipped during build phase"
+    });
+  }
+
   try {
     await prisma.$queryRaw`SELECT 1`;
     await connection.ping();

@@ -4,6 +4,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return NextResponse.json({ enrichments: [] });
+  }
+
   const session = await auth();
 
   if (!session) {

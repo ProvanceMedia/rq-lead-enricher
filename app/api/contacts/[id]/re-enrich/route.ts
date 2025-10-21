@@ -14,6 +14,13 @@ interface RouteContext {
 }
 
 export async function POST(_request: Request, context: RouteContext) {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return NextResponse.json(
+      { error: "Re-enrichment disabled during build" },
+      { status: 503 }
+    );
+  }
+
   const session = await auth();
 
   if (!session) {

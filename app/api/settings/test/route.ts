@@ -10,6 +10,13 @@ import { searchProspects } from "@/lib/apollo";
 const env = getServerEnv();
 
 export async function POST(request: Request) {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return NextResponse.json(
+      { error: "Connection tests disabled during build" },
+      { status: 503 }
+    );
+  }
+
   const session = await auth();
 
   if (!session || !canManageSettings(session.user.role)) {

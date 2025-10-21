@@ -6,6 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { canManageSettings } from "@/lib/roles";
 
 export async function GET() {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return NextResponse.json({ settings: [] });
+  }
+
   const session = await auth();
 
   if (!session || !canManageSettings(session.user.role)) {
@@ -23,6 +27,13 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return NextResponse.json(
+      { error: "Settings cannot be updated during build" },
+      { status: 503 }
+    );
+  }
+
   const session = await auth();
 
   if (!session || !canManageSettings(session.user.role)) {
