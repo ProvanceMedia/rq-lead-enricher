@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// Disable SSL certificate validation for managed databases
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const { Client } = require('pg');
 
 const setupSQL = `
