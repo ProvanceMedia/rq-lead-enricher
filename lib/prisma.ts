@@ -5,10 +5,30 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// Create PrismaClient even during build (with placeholder URL from getServerEnv)
-// The client won't actually connect unless methods are called, which route handlers prevent
-export const prisma = global.prisma ?? new PrismaClient();
+let cachedPrisma: PrismaClient | null = null;
 
-if (process.env.NODE_ENV !== "production") {
-  global.prisma = prisma;
+function getPrismaClient(): PrismaClient {
+  if (!cachedPrisma) {
+    console.log('[Prisma] Creating new PrismaClient');
+    cachedPrisma = new PrismaClient();
+  }
+  return cachedPrisma;
+}
+
+// Use Proxy to lazy-load Prisma at runtime
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const client = getPrismaClient();
+    const value = client[prop as keyof PrismaClient];
+    // Bind methods to the client instance
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
+  }
+});
+
+// For development, cache in global
+if (process.env.NODE_ENV !== "production" && !global.prisma) {
+  global.prisma = getPrismaClient();
 }

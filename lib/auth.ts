@@ -136,9 +136,20 @@ export function getAuthOptionsRuntime(): NextAuthOptions {
 
 // Lazy evaluation - don't initialize during build
 let _authOptions: NextAuthOptions | null = null;
+let _wasBuildPhase = process.env.SKIP_ENV_VALIDATION === "true";
 
 export function getAuthOptionsExport(): NextAuthOptions {
+  const isBuildPhaseNow = process.env.SKIP_ENV_VALIDATION === "true";
+
+  // Clear cache if transitioning from build to runtime
+  if (_wasBuildPhase && !isBuildPhaseNow && _authOptions) {
+    console.log('[Auth] Clearing build-phase authOptions cache');
+    _authOptions = null;
+    _wasBuildPhase = false;
+  }
+
   if (!_authOptions) {
+    console.log('[Auth] Creating authOptions, build phase:', isBuildPhaseNow);
     _authOptions = getAuthOptions();
   }
   return _authOptions;
