@@ -1,4 +1,10 @@
-import { Queue, Worker, QueueEvents, type JobsOptions } from "bullmq";
+import {
+  Queue,
+  Worker,
+  QueueEvents,
+  type JobsOptions,
+  type Processor
+} from "bullmq";
 import IORedis from "ioredis";
 
 import { getServerEnv } from "@/lib/env";
@@ -19,8 +25,10 @@ export const QUEUE_NAMES = {
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
-function createQueue(name: QueueName) {
-  return new Queue(name, {
+function createQueue<T = any, R = any, N extends string = string>(
+  name: QueueName
+) {
+  return new Queue<T, R, N>(name, {
     connection,
     defaultJobOptions: {
       removeOnComplete: true,
@@ -39,12 +47,12 @@ export const enrichQueue = createQueue(QUEUE_NAMES.enrich);
 export const updateQueue = createQueue(QUEUE_NAMES.update);
 export const notifyQueue = createQueue(QUEUE_NAMES.notify);
 
-export function createWorker(
+export function createWorker<T = any, R = any, N extends string = string>(
   name: QueueName,
-  processor: Parameters<typeof Worker>[1],
+  processor: Processor<T, R, N>,
   concurrency = 1
 ) {
-  return new Worker(name, processor, {
+  return new Worker<T, R, N>(name, processor, {
     connection,
     concurrency
   });

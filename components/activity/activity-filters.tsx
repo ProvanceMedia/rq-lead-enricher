@@ -34,7 +34,9 @@ export function ActivityFilters({
   const handleChange = useCallback(
     (name: string, rawValue: string | null) => {
       const value = rawValue && rawValue.length > 0 ? rawValue : null;
-      const params = new URLSearchParams(searchParams ?? undefined);
+      const params = searchParams
+        ? new URLSearchParams(searchParams.toString())
+        : new URLSearchParams();
 
       if (value) {
         params.set(name, value);

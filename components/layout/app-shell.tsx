@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { Role } from "@prisma/client";
 
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
 
 const navItems = [
   { href: "/queue", label: "Queue" },
@@ -66,10 +65,8 @@ export function AppShell({ children, activePath, user }: AppShellProps) {
               <p className="text-muted-foreground capitalize">{user.role}</p>
             </div>
             <Separator orientation="vertical" className="h-6" />
-            <SignOutButton>
-              <Button variant="outline" size="sm">
-                Sign out
-              </Button>
+            <SignOutButton variant="outline" size="sm">
+              Sign out
             </SignOutButton>
           </div>
         </div>

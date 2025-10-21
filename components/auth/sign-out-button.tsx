@@ -1,22 +1,29 @@
 "use client";
 
-import { cloneElement, isValidElement } from "react";
+import * as React from "react";
 import { signOut } from "next-auth/react";
 
-interface SignOutButtonProps {
-  children: React.ReactElement;
-}
+import { Button, type ButtonProps } from "@/components/ui/button";
 
-export function SignOutButton({ children }: SignOutButtonProps) {
-  if (!isValidElement(children)) {
-    throw new Error("SignOutButton expects a single React element as a child");
-  }
+type SignOutButtonProps = ButtonProps;
 
-  return cloneElement(children, {
-    onClick: async (event: React.MouseEvent<HTMLButtonElement>) => {
-      children.props?.onClick?.(event);
-      event.preventDefault();
-      await signOut({ callbackUrl: "/auth/sign-in" });
+export function SignOutButton({
+  children = "Sign out",
+  onClick,
+  ...props
+}: SignOutButtonProps) {
+  const handleClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    onClick?.(event);
+    if (event.defaultPrevented) {
+      return;
     }
-  });
+    event.preventDefault();
+    await signOut({ callbackUrl: "/auth/sign-in" });
+  };
+
+  return (
+    <Button {...props} onClick={handleClick}>
+      {children}
+    </Button>
+  );
 }

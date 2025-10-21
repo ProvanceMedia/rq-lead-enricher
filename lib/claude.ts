@@ -2,6 +2,11 @@ import { getServerEnv } from "@/lib/env";
 
 const env = getServerEnv();
 
+type ClaudeMessage = {
+  type: string;
+  text?: string;
+};
+
 type AnthropicClient = {
   messages: {
     create: (args: {
@@ -14,23 +19,23 @@ type AnthropicClient = {
         content: Array<{ type: "text"; text: string }>;
       }>;
     }) => Promise<{
-      content: Array<{ type: "text"; text: string }>;
+      content: ClaudeMessage[];
     }>;
   };
 };
 
 let anthropicClient: AnthropicClient | null = null;
 
-async function getAnthropic() {
+async function getAnthropic(): Promise<AnthropicClient> {
   if (!env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
 
   if (!anthropicClient) {
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    anthropicClient = new Anthropic({
+    const module = await import("@anthropic-ai/sdk");
+    anthropicClient = new module.default({
       apiKey: env.ANTHROPIC_API_KEY
-    }) as AnthropicClient;
+    }) as unknown as AnthropicClient;
   }
 
   return anthropicClient;
@@ -142,7 +147,7 @@ ${context}
   });
 
   const textContent = response.content
-    .filter((item): item is { type: "text"; text: string } => item.type === "text")
+    .filter((item): item is { type: "text"; text: string } => item.type === "text" && typeof item.text === "string")
     .map((item) => item.text)
     .join("\n");
 
