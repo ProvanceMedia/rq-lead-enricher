@@ -5,30 +5,31 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-let cachedPrisma: PrismaClient | null = null;
+let cachedClient: PrismaClient | null = null;
 
-function getPrismaClient(): PrismaClient {
-  if (!cachedPrisma) {
-    console.log('[Prisma] Creating new PrismaClient');
-    cachedPrisma = new PrismaClient();
+function getClient(): PrismaClient {
+  if (cachedClient) return cachedClient;
+  if (global.prisma) {
+    cachedClient = global.prisma;
+    return cachedClient;
   }
-  return cachedPrisma;
+
+  console.log('[Prisma] Creating new PrismaClient');
+  cachedClient = new PrismaClient();
+
+  if (process.env.NODE_ENV !== "production") {
+    global.prisma = cachedClient;
+  }
+
+  return cachedClient;
 }
 
-// Use Proxy to lazy-load Prisma at runtime
-export const prisma = new Proxy({} as PrismaClient, {
-  get(_target, prop) {
-    const client = getPrismaClient();
-    const value = client[prop as keyof PrismaClient];
-    // Bind methods to the client instance
-    if (typeof value === 'function') {
-      return value.bind(client);
-    }
-    return value;
+// Export a Proxy that lazily initializes the client
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_, prop) {
+    return getClient()[prop as keyof PrismaClient];
+  },
+  has(_, prop) {
+    return prop in getClient();
   }
 });
-
-// For development, cache in global
-if (process.env.NODE_ENV !== "production" && !global.prisma) {
-  global.prisma = getPrismaClient();
-}
