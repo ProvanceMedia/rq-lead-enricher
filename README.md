@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RoboQuill Outreach Approvals
+
+Production-grade Next.js 14 platform for reviewing and approving enriched contacts ahead of RoboQuill's handwritten mail outreach. Operators can triage enrichment output, push approved contacts to HubSpot, and monitor queue health end to end.
+
+## Features
+
+- **Secure access** with NextAuth magic links + Google OAuth restricted by email domain and role-based authorization (admin, operator, read only).
+- **Approval workflow** showcasing enriched data, source links, and address previews with one-click approve / reject actions.
+- **Activity timeline** with filters, CSV export, and realtime event history.
+- **Contact deep dive** including enrichment history, audit trail, and manual re-enrichment trigger.
+- **Configurable settings** for quotas, targeting rules, cool downs, skip logic, and integration health checks.
+- **Background automation** driven by BullMQ workers for Apollo ingestion, Firecrawl + Claude enrichment, HubSpot updates, and Slack notifications.
+- **Daily prospect pull** scheduled for 08:00 London time via DigitalOcean App Platform cron job.
+- **Seed data** for instant demo (5 contacts + admin operator account).
+
+## Tech Stack
+
+- Next.js 14 App Router, React 18, TypeScript.
+- Tailwind CSS with shadcn/ui components.
+- NextAuth with Prisma adapter on Postgres.
+- BullMQ backed by Managed Redis.
+- Firecrawl + Anthropic Claude for enrichment intelligence.
+- HubSpot CRM API for downstream updates.
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- PostgreSQL database
+- Redis instance
+
+### Installation
 
 ```bash
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+npm run seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit `http://localhost:3000`. Sign in with `operator@roboquill.io` (magic link) created during seeding.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Copy `.env.example` and populate:
 
-## Learn More
+- `DATABASE_URL`, `REDIS_URL`
+- `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `ALLOWED_EMAIL_DOMAIN`
+- `APOLLO_API_KEY`, `HUBSPOT_PRIVATE_APP_TOKEN`
+- `ANTHROPIC_API_KEY`, `FIRECRAWL_API_KEY`
+- Optional: `SLACK_WEBHOOK_URL`, SMTP credentials, Google OAuth client.
 
-To learn more about Next.js, take a look at the following resources:
+### Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `npm run dev` – Next.js local development server.
+- `npm run build` / `npm run start` – production build and launch.
+- `npm run build:worker` / `npm run start:worker` – compile and run BullMQ workers.
+- `npm run prisma:migrate` – deploy Prisma migrations.
+- `npm run seed` – load demo data (idempotent).
+- `npm run test` – run Vitest unit tests.
+- `npm run type-check` / `npm run lint` – static analysis.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Background Workers & Queues
 
-## Deploy on Vercel
+- `ingestQueue` – pulls prospects from Apollo, stages contacts, schedules enrichment.
+- `enrichQueue` – scrapes with Firecrawl, calls Claude for structured insights, populates Prisma.
+- `updateQueue` – applies HubSpot field mappings on approval and records results.
+- `notifyQueue` – Slack approval notifications and optional daily digest.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Concurrency defaults: 1 (ingest), 3 (enrich), 2 (update), 1 (notify). Global Redis connection reused across services.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scheduled Prospect Pull
+
+`jobs/pull_and_enqueue.ts` enqueues a `daily-prospect-pull` respecting `DAILY_QUOTA`. DigitalOcean App Platform executes it Monday–Friday at 08:00 Europe/London via `app.yaml`.
+
+## Deployment (DigitalOcean App Platform)
+
+`app.yaml` provisions:
+
+- Web service (Next.js) with health check on `/api/healthz`.
+- Dedicated worker service running compiled queues.
+- Scheduled job for daily Apollo ingest.
+- Managed Postgres + Redis attachments with environment mapping and secret placeholders.
+
+Adjust `<GITHUB_OWNER>/<REPO_NAME>` and deploy via the App Platform dashboard or CLI.
+
+## Testing
+
+Key unit tests live under `tests/` covering HubSpot mapping, API authorization edge cases, and queue helper smoke tests. Run `npm run test` before shipping.
+
+## Observability & Notifications
+
+- Events table acts as audit log for every workflow step.
+- Slack webhook (optional) receives approval-ready blocks and digest summaries.
+- Activity page exposes filters and CSV export for rapid reporting.
+
+## Additional Notes
+
+- Enrichment workflow defers to Claude classification decision tree and falls back to a friendly default P.S. line when no recent wins are detected.
+- Settings page stores operational configuration in Prisma to allow live updates by admins without redeploying.
+- Seeded admin: `operator@roboquill.io`. Adjust or remove in `prisma/seed.ts` for production.

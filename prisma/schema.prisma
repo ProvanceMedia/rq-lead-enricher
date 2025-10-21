@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  operator
+  read_only
+}
+
+enum EnrichmentStatus {
+  awaiting_approval
+  approved
+  rejected
+  updated
+  error
+}
+
+enum EventType {
+  pulled_from_apollo
+  deduped
+  enriched
+  approval_requested
+  approved
+  rejected
+  hubspot_updated
+  failed
+  skipped
+  queued_for_update
+  re_enrichment_requested
+}
+
+model Contact {
+  id               String      @id @default(cuid())
+  email            String      @unique
+  firstName        String?
+  lastName         String?
+  company          String?
+  domain           String?
+  apolloContactId  String?
+  hubspotContactId String?
+  createdAt        DateTime    @default(now())
+  enrichments      Enrichment[]
+  events           Event[]
+}
+
+model Enrichment {
+  id               String            @id @default(cuid())
+  contactId        String
+  status           EnrichmentStatus
+  addressLine1     String?
+  addressLine2     String?
+  city             String?
+  postcode         String?
+  country          String?
+  classification   String?
+  psLine           String?
+  psSourceUrl      String?
+  addressSourceUrl String?
+  approvalBlock    String?
+  error            String?
+  decidedByUserId  String?
+  decidedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  contact Contact @relation(fields: [contactId], references: [id])
+  events  Event[]
+}
+
+model Event {
+  id           String     @id @default(cuid())
+  contactId    String?
+  enrichmentId String?
+  type         EventType
+  payload      Json?
+  createdAt    DateTime   @default(now())
+
+  contact    Contact?    @relation(fields: [contactId], references: [id])
+  enrichment Enrichment? @relation(fields: [enrichmentId], references: [id])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      Role     @default(read_only)
+  createdAt DateTime @default(now())
+  settings  Setting[]
+}
+
+model Setting {
+  key             String   @id
+  value           Json?
+  updatedAt       DateTime @updatedAt
+  updatedByUserId String?
+
+  updatedBy User? @relation(fields: [updatedByUserId], references: [id])
+}

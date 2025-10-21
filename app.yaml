@@ -1,0 +1,106 @@
+name: roboquill-outreach
+region: lon
+
+services:
+  - name: web
+    github:
+      repo: <GITHUB_OWNER>/<REPO_NAME>
+      branch: main
+      deploy_on_push: true
+    run_command: "npm run start"
+    build_command: "npm ci && npm run prisma:migrate && npm run build"
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /api/healthz
+      initial_delay_seconds: 15
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${db.DATABASE_URL}
+      - key: REDIS_URL
+        value: ${redis.REDIS_URL}
+      - key: NEXTAUTH_URL
+        value: https://your-domain.com
+      - key: NEXTAUTH_SECRET
+        type: SECRET
+      - key: HUBSPOT_PRIVATE_APP_TOKEN
+        type: SECRET
+      - key: APOLLO_API_KEY
+        type: SECRET
+      - key: ANTHROPIC_API_KEY
+        type: SECRET
+      - key: FIRECRAWL_API_KEY
+        type: SECRET
+      - key: DAILY_QUOTA
+        value: "40"
+      - key: ALLOWED_EMAIL_DOMAIN
+        value: "roboquill.io"
+
+  - name: worker
+    github:
+      repo: <GITHUB_OWNER>/<REPO_NAME>
+      branch: main
+      deploy_on_push: true
+    run_command: "node dist/worker/index.js"
+    build_command: "npm ci && npm run build:worker"
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        value: ${db.DATABASE_URL}
+      - key: REDIS_URL
+        value: ${redis.REDIS_URL}
+      - key: HUBSPOT_PRIVATE_APP_TOKEN
+        type: SECRET
+      - key: APOLLO_API_KEY
+        type: SECRET
+      - key: ANTHROPIC_API_KEY
+        type: SECRET
+      - key: FIRECRAWL_API_KEY
+        type: SECRET
+      - key: DAILY_QUOTA
+        value: "40"
+
+jobs:
+  - name: daily-prospect-pull
+    github:
+      repo: <GITHUB_OWNER>/<REPO_NAME>
+      branch: main
+      deploy_on_push: false
+    kind: PRE_DEPLOY
+    run_command: "node dist/jobs/pull_and_enqueue.js"
+    schedule:
+      type: CRON
+      cron: "0 8 * * 1-5"
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+      - key: REDIS_URL
+        value: ${redis.REDIS_URL}
+      - key: APOLLO_API_KEY
+        type: SECRET
+
+databases:
+  - name: db
+    engine: PG
+    production: true
+    cluster_name: rq-outreach-pg
+    db_name: rq_outreach
+    db_user: rq_outreach_user
+    size: db-s-1vcpu-1gb
+    version: "16"
+  - name: redis
+    engine: REDIS
+    production: true
+    cluster_name: rq-outreach-redis
+    size: redis-s-1vcpu-1gb
+    version: "7"
