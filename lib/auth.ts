@@ -1,32 +1,9 @@
 import { Role } from "@prisma/client";
-import nodemailer from "nodemailer";
 import GoogleProvider from "next-auth/providers/google";
-import EmailProvider from "next-auth/providers/email";
 import { getServerSession, type NextAuthOptions } from "next-auth";
 
 import { prisma } from "@/lib/prisma";
 import { getServerEnv } from "@/lib/env";
-
-function createEmailTransporter() {
-  const env = getServerEnv();
-  if (env.SMTP_HOST && env.SMTP_PORT && env.SMTP_USER && env.SMTP_PASSWORD) {
-    return nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT,
-      secure: env.SMTP_PORT === 465,
-      auth: {
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASSWORD
-      }
-    });
-  }
-
-  return nodemailer.createTransport({
-    streamTransport: true,
-    newline: "unix",
-    buffer: true
-  });
-}
 
 let authOptionsCache: NextAuthOptions | null = null;
 let isBuildPhase = process.env.SKIP_ENV_VALIDATION === "true";
@@ -57,27 +34,8 @@ function getAuthOptions(): NextAuthOptions {
       signIn: "/auth/sign-in"
     },
     providers: [
-      EmailProvider({
-        sendVerificationRequest: async ({ identifier, url }) => {
-          const transporter = createEmailTransporter();
-          const { ALLOWED_EMAIL_DOMAIN } = env;
-          if (!identifier.endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) {
-            throw new Error("Email domain not allowed");
-          }
-          const mail = await transporter.sendMail({
-            to: identifier,
-            from: `RoboQuill Outreach <no-reply@${ALLOWED_EMAIL_DOMAIN}>`,
-            subject: "Your RoboQuill Outreach sign in link",
-            text: `Sign in to RoboQuill Outreach:\n${url}`,
-            html: `<p>Sign in to RoboQuill Outreach:</p><p><a href="${url}">${url}</a></p>`
-          });
-
-          if ("message" in mail) {
-            // eslint-disable-next-line no-console
-            console.info(mail.message);
-          }
-        }
-      }),
+      // Email provider requires database adapter - removed for JWT-only mode
+      // Use Google OAuth instead
       ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
         ? [
             GoogleProvider({
