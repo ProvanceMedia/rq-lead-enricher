@@ -11,10 +11,35 @@ import { getServerEnv } from "@/lib/env";
 
 const env = getServerEnv();
 
-export const connection = new IORedis(env.REDIS_URL, {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false
-});
+// During build phase, create a mock connection that doesn't actually connect
+class MockRedis {
+  async ping() {
+    return "PONG";
+  }
+  async disconnect() {
+    return undefined;
+  }
+  on() {
+    return this;
+  }
+  once() {
+    return this;
+  }
+  off() {
+    return this;
+  }
+  emit() {
+    return false;
+  }
+}
+
+export const connection =
+  process.env.SKIP_ENV_VALIDATION === "true"
+    ? (new MockRedis() as any)
+    : new IORedis(env.REDIS_URL, {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false
+      });
 
 export const QUEUE_NAMES = {
   ingest: "ingestQueue",
@@ -42,10 +67,26 @@ function createQueue<T = any, R = any, N extends string = string>(
   });
 }
 
-export const ingestQueue = createQueue(QUEUE_NAMES.ingest);
-export const enrichQueue = createQueue(QUEUE_NAMES.enrich);
-export const updateQueue = createQueue(QUEUE_NAMES.update);
-export const notifyQueue = createQueue(QUEUE_NAMES.notify);
+// During build, export mock queues to avoid connection attempts
+const createMockQueue = () => ({
+  add: async () => ({ id: "mock" }),
+  getJob: async () => null,
+  getJobs: async () => [],
+  close: async () => undefined
+} as any);
+
+export const ingestQueue = process.env.SKIP_ENV_VALIDATION === "true"
+  ? createMockQueue()
+  : createQueue(QUEUE_NAMES.ingest);
+export const enrichQueue = process.env.SKIP_ENV_VALIDATION === "true"
+  ? createMockQueue()
+  : createQueue(QUEUE_NAMES.enrich);
+export const updateQueue = process.env.SKIP_ENV_VALIDATION === "true"
+  ? createMockQueue()
+  : createQueue(QUEUE_NAMES.update);
+export const notifyQueue = process.env.SKIP_ENV_VALIDATION === "true"
+  ? createMockQueue()
+  : createQueue(QUEUE_NAMES.notify);
 
 export function createWorker<T = any, R = any, N extends string = string>(
   name: QueueName,

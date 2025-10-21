@@ -35,6 +35,20 @@ export function getServerEnv(): ServerEnv {
     return serverEnvCache;
   }
 
+  // During build phase, return placeholder values to avoid validation errors
+  if (process.env.SKIP_ENV_VALIDATION === "true") {
+    serverEnvCache = {
+      NODE_ENV: "production",
+      DATABASE_URL: "postgresql://placeholder",
+      REDIS_URL: "redis://placeholder",
+      NEXTAUTH_URL: "http://placeholder",
+      NEXTAUTH_SECRET: "placeholder",
+      ALLOWED_EMAIL_DOMAIN: "placeholder.com",
+      DAILY_QUOTA: 40
+    } as ServerEnv;
+    return serverEnvCache;
+  }
+
   serverEnvCache = serverEnvSchema.parse({
     NODE_ENV: process.env.NODE_ENV,
     DATABASE_URL: process.env.DATABASE_URL,

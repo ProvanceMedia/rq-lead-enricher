@@ -14,7 +14,7 @@ interface RouteContext {
 }
 
 export async function POST(_request: Request, context: RouteContext) {
-  if (process.env.NEXT_PHASE === "phase-production-build") {
+  if (process.env.SKIP_ENV_VALIDATION === "true") {
     return NextResponse.json(
       { error: "Re-enrichment disabled during build" },
       { status: 503 }

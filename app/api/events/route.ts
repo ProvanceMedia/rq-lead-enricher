@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
-  if (process.env.NEXT_PHASE === "phase-production-build") {
+  if (process.env.SKIP_ENV_VALIDATION === "true") {
     return NextResponse.json({ events: [] });
   }
 
