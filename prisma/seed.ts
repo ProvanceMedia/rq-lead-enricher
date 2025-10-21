@@ -3,12 +3,26 @@ import { EnrichmentStatus, PrismaClient, Role } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function createUser() {
-  const adminEmail = "operator@roboquill.io";
-  await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: { role: Role.admin, name: "Queue Operator" },
-    create: { email: adminEmail, role: Role.admin, name: "Queue Operator" }
-  });
+  const users = [
+    {
+      email: "operator@roboquill.io",
+      name: "Queue Operator",
+      role: Role.admin
+    },
+    {
+      email: "stuart@roboquill.io",
+      name: "Stuart",
+      role: Role.admin
+    }
+  ];
+
+  for (const user of users) {
+    await prisma.user.upsert({
+      where: { email: user.email },
+      update: { role: user.role, name: user.name },
+      create: { email: user.email, role: user.role, name: user.name }
+    });
+  }
 }
 
 async function createContacts() {
