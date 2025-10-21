@@ -1,4 +1,3 @@
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { Role } from "@prisma/client";
 import nodemailer from "nodemailer";
 import GoogleProvider from "next-auth/providers/google";
@@ -48,10 +47,11 @@ function getAuthOptions(): NextAuthOptions {
   const env = getServerEnv();
 
   authOptionsCache = {
-    adapter: PrismaAdapter(prisma),
+    // No adapter - use JWT sessions only (no database tables needed)
     secret: env.NEXTAUTH_SECRET,
     session: {
-      strategy: "jwt"
+      strategy: "jwt",
+      maxAge: 30 * 24 * 60 * 60 // 30 days
     },
     pages: {
       signIn: "/auth/sign-in"
@@ -95,32 +95,65 @@ function getAuthOptions(): NextAuthOptions {
         : [])
     ],
     callbacks: {
-      async signIn({ user }) {
+      async signIn({ user, account }) {
         const { ALLOWED_EMAIL_DOMAIN } = env;
         if (!user.email?.endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)) {
           return false;
         }
+
+        // Create or update user in database on sign-in
+        if (user.email) {
+          await prisma.user.upsert({
+            where: { email: user.email },
+            update: {
+              name: user.name
+            },
+            create: {
+              email: user.email,
+              name: user.name,
+              role: Role.read_only
+            }
+          });
+        }
+
         return true;
       },
       async session({ token, session }) {
         if (token.sub) {
           session.user.id = token.sub;
         }
+        if (token.email) {
+          session.user.email = token.email;
+        }
         if (token.role) {
           session.user.role = token.role as Role;
         }
         return session;
       },
-      async jwt({ token, user }) {
-        if (user) {
-          token.role = (user as { role?: Role }).role ?? Role.read_only;
-        } else if (!token.role) {
+      async jwt({ token, user, account }) {
+        // Initial sign in
+        if (user && user.email) {
+          // Get user from database to get their role
           const dbUser = await prisma.user.findUnique({
-            where: { id: token.sub ?? "" },
+            where: { email: user.email },
+            select: { id: true, role: true }
+          });
+
+          if (dbUser) {
+            token.sub = dbUser.id;
+            token.role = dbUser.role;
+          }
+        }
+
+        // Refresh role from database if not in token
+        if (!token.role && token.email) {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: token.email as string },
             select: { role: true }
           });
           token.role = dbUser?.role ?? Role.read_only;
         }
+
         return token;
       }
     }
