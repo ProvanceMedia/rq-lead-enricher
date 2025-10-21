@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -43,12 +44,12 @@ export async function PUT(request: Request) {
     prisma.setting.upsert({
       where: { key: update.key },
       update: {
-        value: update.value,
+        value: update.value as Prisma.InputJsonValue,
         updatedByUserId: session.user.id
       },
       create: {
         key: update.key,
-        value: update.value,
+        value: update.value as Prisma.InputJsonValue,
         updatedByUserId: session.user.id
       }
     })
