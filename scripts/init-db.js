@@ -1,13 +1,22 @@
-import { sql } from "drizzle-orm";
-import { db, closeDbPool } from "../db/client";
-import * as schema from "../db/schema";
+const { Pool } = require("pg");
+
+const connectionString = process.env.DATABASE_URL || "";
+
+const pool = new Pool({
+  connectionString,
+  ssl: {
+    rejectUnauthorized: false,
+    checkServerIdentity: () => undefined
+  },
+  connectionTimeoutMillis: 10000
+});
 
 async function initDatabase() {
   console.log("Checking database schema...");
 
   try {
     // Create users table
-    await db.execute(sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         email TEXT NOT NULL,
@@ -18,7 +27,7 @@ async function initDatabase() {
     `);
 
     // Create contacts table
-    await db.execute(sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS contacts (
         id TEXT PRIMARY KEY,
         email TEXT NOT NULL UNIQUE,
@@ -33,7 +42,7 @@ async function initDatabase() {
     `);
 
     // Create enrichments table
-    await db.execute(sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS enrichments (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
         contact_id TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
@@ -49,7 +58,7 @@ async function initDatabase() {
     `);
 
     // Create events table
-    await db.execute(sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS events (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
         contact_id TEXT REFERENCES contacts(id) ON DELETE CASCADE,
@@ -61,7 +70,7 @@ async function initDatabase() {
     `);
 
     // Create settings table
-    await db.execute(sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS settings (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
         key TEXT NOT NULL UNIQUE,
@@ -71,19 +80,22 @@ async function initDatabase() {
     `);
 
     // Create indexes
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_enrichments_contact_id ON enrichments(contact_id)`);
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_enrichments_status ON enrichments(status)`);
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_events_contact_id ON events(contact_id)`);
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_events_enrichment_id ON events(enrichment_id)`);
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_enrichments_contact_id ON enrichments(contact_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_enrichments_status ON enrichments(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_events_contact_id ON events(contact_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_events_enrichment_id ON events(enrichment_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC)`);
 
     console.log("✓ Database schema initialized successfully");
   } catch (error) {
     console.error("Failed to initialize database:", error);
     throw error;
   } finally {
-    await closeDbPool();
+    await pool.end();
   }
 }
 
-initDatabase();
+initDatabase().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
