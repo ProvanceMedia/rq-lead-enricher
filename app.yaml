@@ -14,18 +14,31 @@ services:
     instance_size_slug: basic-xxs
     health_check:
       http_path: /api/healthz
-      initial_delay_seconds: 15
+      port: 3000
+      initial_delay_seconds: 30
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
     envs:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
         scope: RUN_AND_BUILD_TIME
         value: ${db.DATABASE_URL}
-      - key: CLERK_PUBLISHABLE_KEY
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
         value: ${CLERK_PUBLISHABLE_KEY}
       - key: CLERK_SECRET_KEY
         type: SECRET
         value: ${CLERK_SECRET_KEY}
+      - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL
+        value: "/sign-in"
+      - key: NEXT_PUBLIC_CLERK_SIGN_UP_URL
+        value: "/sign-up"
+      - key: NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL
+        value: "/queue"
+      - key: NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL
+        value: "/queue"
       - key: HUBSPOT_PRIVATE_APP_TOKEN
         type: SECRET
         value: ${HUBSPOT_PRIVATE_APP_TOKEN}
