@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { withErrorHandling } from "@/lib/api-handler";
 import { requireUser } from "@/lib/auth";
 import { HttpError } from "@/lib/errors";

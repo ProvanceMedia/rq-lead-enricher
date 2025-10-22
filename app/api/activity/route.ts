@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/db/client";
 import { contacts, enrichments, events } from "@/db/schema";

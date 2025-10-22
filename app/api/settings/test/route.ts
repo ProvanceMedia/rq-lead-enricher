@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { withErrorHandling } from "@/lib/api-handler";
