@@ -16,7 +16,11 @@ services:
       http_path: /api/healthz
       initial_delay_seconds: 30
     envs:
+      - key: NPM_CONFIG_PRODUCTION
+        scope: BUILD_TIME
+        value: "false"
       - key: NODE_ENV
+        scope: RUN_TIME
         value: production
       - key: NODE_TLS_REJECT_UNAUTHORIZED
         value: "0"
