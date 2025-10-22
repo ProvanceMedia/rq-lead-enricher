@@ -9,17 +9,12 @@ services:
       deploy_on_push: true
     run_command: "npm run start"
     build_command: "npm ci && npx drizzle-kit push:pg && npm run build"
-    http_port: 3000
+    http_port: 8080
     instance_count: 1
     instance_size_slug: basic-xxs
     health_check:
       http_path: /api/healthz
-      port: 3000
       initial_delay_seconds: 30
-      period_seconds: 10
-      timeout_seconds: 5
-      success_threshold: 1
-      failure_threshold: 3
     envs:
       - key: NODE_ENV
         value: production
