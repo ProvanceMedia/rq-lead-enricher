@@ -1,9 +1,16 @@
 const { Pool } = require("pg");
+const { parse } = require("pg-connection-string");
 
 const connectionString = process.env.DATABASE_URL || "";
+const config = parse(connectionString);
 
-const pool = new Pool({
-  connectionString,
+// First, connect to defaultdb to create the target database if needed
+const adminPool = new Pool({
+  host: config.host,
+  port: config.port,
+  user: config.user,
+  password: config.password,
+  database: "defaultdb", // Connect to default database first
   ssl: {
     rejectUnauthorized: false,
     checkServerIdentity: () => undefined
@@ -12,9 +19,38 @@ const pool = new Pool({
 });
 
 async function initDatabase() {
-  console.log("Checking database schema...");
+  console.log("Checking database setup...");
 
   try {
+    // Create the target database if it doesn't exist
+    const targetDb = config.database || "rq_outreach";
+    console.log(`Creating database ${targetDb} if it doesn't exist...`);
+
+    await adminPool.query(`CREATE DATABASE ${targetDb}`);
+    console.log(`✓ Database ${targetDb} created`);
+  } catch (error) {
+    if (error.code === "42P04") {
+      console.log("✓ Database already exists");
+    } else {
+      console.log(`Note: ${error.message}`);
+    }
+  }
+
+  await adminPool.end();
+
+  // Now connect to the actual database to create tables
+  const pool = new Pool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false,
+      checkServerIdentity: () => undefined
+    },
+    connectionTimeoutMillis: 10000
+  });
+
+  try {
+    console.log("Creating database schema...");
+
     // Create users table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
