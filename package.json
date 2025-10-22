@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 8080",
     "lint": "next lint",
-    "drizzle:push": "drizzle-kit push:pg",
+    "drizzle:push": "drizzle-kit push",
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
