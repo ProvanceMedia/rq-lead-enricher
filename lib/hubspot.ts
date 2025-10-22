@@ -1,25 +1,77 @@
-import { Enrichment, Contact } from "@prisma/client";
-
-import { getServerEnv } from "@/lib/env";
-
-const env = getServerEnv();
+import type { Contact, Enrichment } from "@/db/schema";
+import { env } from "./env";
+import { HttpError } from "./errors";
 
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
 
-export interface HubSpotContactPayload {
-  properties: Record<string, string | null>;
+type HubspotUpdateResult =
+  | { status: "skipped"; reason: string }
+  | { status: "success"; id: string }
+  | { status: "failed"; reason: string };
+
+const token = env.HUBSPOT_PRIVATE_APP_TOKEN;
+
+const hubspotHeaders: HeadersInit = token
+  ? {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "User-Agent": "RoboQuill-Outreach/1.0"
+    }
+  : {};
+
+async function findContactIdByEmail(email: string) {
+  if (!token) {
+    return null;
+  }
+
+  const response = await fetch(`${HUBSPOT_BASE_URL}/crm/v3/objects/contacts/search`, {
+    method: "POST",
+    headers: hubspotHeaders,
+    body: JSON.stringify({
+      filterGroups: [
+        {
+          filters: [
+            {
+              propertyName: "email",
+              operator: "EQ",
+              value: email
+            }
+          ]
+        }
+      ],
+      limit: 1,
+      properties: ["email"]
+    })
+  });
+
+  if (!response.ok) {
+    console.warn("HubSpot search failed", await response.text());
+    return null;
+  }
+
+  const data = (await response.json()) as { results?: Array<{ id: string }> };
+  return data.results?.[0]?.id ?? null;
 }
 
-export const HUBSPOT_STATIC_FIELDS = {
-  lifecyclestage: "1101494863",
-  outbound_cauldron_stage: "3. Address Procured"
-} as const;
+export async function syncHubspotContact({
+  contact,
+  enrichment
+}: {
+  contact: Contact;
+  enrichment: Enrichment;
+}): Promise<HubspotUpdateResult> {
+  if (!token) {
+    return { status: "skipped", reason: "Missing HUBSPOT_PRIVATE_APP_TOKEN" };
+  }
 
-export function mapEnrichmentToHubSpot(
-  contact: Contact,
-  enrichment: Enrichment
-): HubSpotContactPayload {
-  return {
+  const hubspotId =
+    contact.hubspotContactId ?? (await findContactIdByEmail(contact.email));
+
+  if (!hubspotId) {
+    return { status: "failed", reason: "HubSpot contact not found" };
+  }
+
+  const payload = {
     properties: {
       address: contact.company ?? "",
       street_address_line_2: enrichment.addressLine1 ?? "",
@@ -29,55 +81,25 @@ export function mapEnrichmentToHubSpot(
       zip: enrichment.postcode ?? "",
       country: enrichment.country ?? "",
       company_type: enrichment.classification ?? "",
-      lifecyclestage: HUBSPOT_STATIC_FIELDS.lifecyclestage,
-      outbound_cauldron_stage: HUBSPOT_STATIC_FIELDS.outbound_cauldron_stage,
+      lifecyclestage: "1101494863",
+      outbound_cauldron_stage: "3. Address Procured",
       custom_p_s__line: enrichment.psLine ?? ""
     }
   };
-}
 
-async function hubspotFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!env.HUBSPOT_PRIVATE_APP_TOKEN) {
-    throw new Error("HUBSPOT_PRIVATE_APP_TOKEN is not configured");
-  }
-
-  const response = await fetch(`${HUBSPOT_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${env.HUBSPOT_PRIVATE_APP_TOKEN}`,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {})
-    }
+  const response = await fetch(`${HUBSPOT_BASE_URL}/crm/v3/objects/contacts/${hubspotId}`, {
+    method: "PATCH",
+    headers: hubspotHeaders,
+    body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`HubSpot request failed (${response.status}): ${message}`);
+    const errorBody = await response.text();
+    throw new HttpError(
+      `HubSpot update failed: ${response.status} ${errorBody}`,
+      response.status
+    );
   }
 
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  return (await response.json()) as T;
-}
-
-export async function updateHubSpotContact(
-  hubspotContactId: string,
-  payload: HubSpotContactPayload
-) {
-  return hubspotFetch(
-    `/crm/v3/objects/contacts/${hubspotContactId}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(payload)
-    }
-  );
-}
-
-export async function createHubSpotContact(payload: HubSpotContactPayload) {
-  return hubspotFetch<{ id: string }>(`/crm/v3/objects/contacts`, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
+  return { status: "success", id: hubspotId };
 }

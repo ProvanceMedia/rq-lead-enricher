@@ -1,11 +1,10 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true
-  },
-  typescript: {
-    ignoreBuildErrors: false
+/** @type {import("next").NextConfig} */
+const config = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "2mb"
+    }
   }
 };
 
-export default nextConfig;
+export default config;

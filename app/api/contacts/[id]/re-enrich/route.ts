@@ -1,59 +1,49 @@
-import { NextResponse } from "next/server";
-import { EventType } from "@prisma/client";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { contacts, enrichments } from "@/db/schema";
+import { withErrorHandling } from "@/lib/api-handler";
+import { requireUser } from "@/lib/auth";
+import { logEvent } from "@/lib/events";
+import { notFound } from "@/lib/errors";
 
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { canApprove } from "@/lib/roles";
-import { enrichQueue } from "@/lib/queue";
-import { recordEvent } from "@/lib/events";
+export const POST = withErrorHandling(async ({ context }) => {
+  const { dbUser } = await requireUser(["admin", "operator"]);
+  const contactId = context?.params?.id as string | undefined;
 
-interface RouteContext {
-  params: {
-    id: string;
-  };
-}
-
-export async function POST(_request: Request, context: RouteContext) {
-  if (process.env.SKIP_ENV_VALIDATION === "true") {
-    return NextResponse.json(
-      { error: "Re-enrichment disabled during build" },
-      { status: 503 }
-    );
+  if (!contactId) {
+    throw notFound("Contact not found");
   }
 
-  const session = await auth();
-
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!canApprove(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const contact = await prisma.contact.findUnique({
-    where: { id: context.params.id }
-  });
+  const [contact] = await db
+    .select()
+    .from(contacts)
+    .where(eq(contacts.id, contactId))
+    .limit(1);
 
   if (!contact) {
-    return NextResponse.json({ error: "Contact not found" }, { status: 404 });
+    throw notFound("Contact not found");
   }
 
-  const enrichment = await prisma.enrichment.create({
-    data: {
-      contactId: contact.id,
-      status: "awaiting_approval"
+  const [enrichment] = await db
+    .insert(enrichments)
+    .values({
+      contactId,
+      status: "awaiting_approval",
+      approvalBlock: null
+    })
+    .returning();
+
+  await logEvent({
+    contactId,
+    enrichmentId: enrichment.id,
+    type: "re_enrich_requested",
+    payload: {
+      requestedBy: dbUser.id
     }
   });
 
-  await recordEvent({
-    type: EventType.re_enrichment_requested,
-    contactId: contact.id,
-    enrichmentId: enrichment.id,
-    payload: { userId: session.user.id }
-  });
-
-  await enrichQueue.add("enrich-contact", { enrichmentId: enrichment.id });
-
-  return NextResponse.json({ enrichment });
-}
+  return {
+    success: true,
+    enrichmentId: enrichment.id
+  };
+});

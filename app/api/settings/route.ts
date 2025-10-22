@@ -1,72 +1,39 @@
-import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { withErrorHandling } from "@/lib/api-handler";
+import { requireUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
+import { getSettingsMap, upsertSettings } from "@/lib/services/settings";
 
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { canManageSettings } from "@/lib/roles";
+type PatchBody = {
+  updates: Array<{ key: string; value: unknown }>;
+};
 
-export async function GET() {
-  if (process.env.SKIP_ENV_VALIDATION === "true") {
-    return NextResponse.json({ settings: [] });
+export const GET = withErrorHandling(async () => {
+  await requireUser(["admin", "operator", "read_only"]);
+  const values = await getSettingsMap();
+
+  return {
+    data: values
+  };
+});
+
+export const PATCH = withErrorHandling(async ({ request }) => {
+  await requireUser(["admin"]);
+  const body = (await request.json().catch(() => ({}))) as PatchBody;
+
+  if (!Array.isArray(body.updates) || body.updates.length === 0) {
+    throw new HttpError("No updates provided", 400);
   }
 
-  const session = await auth();
-
-  if (!session || !canManageSettings(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const settings = await prisma.setting.findMany();
-
-  return NextResponse.json({
-    settings: settings.map((setting) => ({
-      key: setting.key,
-      value: setting.value
+  await upsertSettings(
+    body.updates.map((update) => ({
+      key: update.key,
+      value: update.value
     }))
-  });
-}
-
-export async function PUT(request: Request) {
-  if (process.env.SKIP_ENV_VALIDATION === "true") {
-    return NextResponse.json(
-      { error: "Settings cannot be updated during build" },
-      { status: 503 }
-    );
-  }
-
-  const session = await auth();
-
-  if (!session || !canManageSettings(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const body = (await request.json().catch(() => null)) as {
-    updates?: Array<{ key: string; value: unknown }>;
-  } | null;
-
-  if (!body?.updates?.length) {
-    return NextResponse.json(
-      { error: "No updates provided" },
-      { status: 400 }
-    );
-  }
-
-  const updates = body.updates.map((update) =>
-    prisma.setting.upsert({
-      where: { key: update.key },
-      update: {
-        value: update.value as Prisma.InputJsonValue,
-        updatedByUserId: session.user.id
-      },
-      create: {
-        key: update.key,
-        value: update.value as Prisma.InputJsonValue,
-        updatedByUserId: session.user.id
-      }
-    })
   );
 
-  await prisma.$transaction(updates);
+  const values = await getSettingsMap();
 
-  return NextResponse.json({ ok: true });
-}
+  return {
+    data: values
+  };
+});

@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "RoboQuill Outreach Approvals",
+  title: "RoboQuill Outreach",
   description:
-    "Approve enriched contacts for RoboQuill handwritten outreach and monitor activity."
+    "Approve enriched contacts, sync to HubSpot, and manage outreach settings."
 };
 
-export default function RootLayout({
-  children
-}: {
+type RootLayoutProps = Readonly<{
   children: React.ReactNode;
-}) {
+}>;
+
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
-      <body className={inter.variable}>{children}</body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body className={inter.variable}>{children}</body>
+      </html>
+    </ClerkProvider>
   );
 }

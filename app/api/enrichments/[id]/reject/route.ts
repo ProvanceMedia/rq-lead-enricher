@@ -1,71 +1,63 @@
-import { NextResponse } from "next/server";
-import { EventType } from "@prisma/client";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { enrichments } from "@/db/schema";
+import { withErrorHandling } from "@/lib/api-handler";
+import { requireUser } from "@/lib/auth";
+import { logEvent } from "@/lib/events";
+import { HttpError, notFound } from "@/lib/errors";
 
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { canApprove } from "@/lib/roles";
-import { recordEvent } from "@/lib/events";
+type RejectBody = {
+  reason?: string;
+};
 
-interface RouteContext {
-  params: {
-    id: string;
-  };
-}
+export const POST = withErrorHandling(async ({ request, context }) => {
+  const { dbUser } = await requireUser(["admin", "operator"]);
+  const id = context?.params?.id as string | undefined;
 
-export async function POST(request: Request, context: RouteContext) {
-  if (process.env.SKIP_ENV_VALIDATION === "true") {
-    return NextResponse.json(
-      { error: "Rejections disabled during build" },
-      { status: 503 }
-    );
+  if (!id) {
+    throw notFound("Enrichment not found");
   }
 
-  const session = await auth();
+  const body = (await request.json().catch(() => ({}))) as RejectBody;
+  const reason = body.reason?.slice(0, 500) ?? null;
 
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const [record] = await db
+    .select()
+    .from(enrichments)
+    .where(eq(enrichments.id, id))
+    .limit(1);
+
+  if (!record) {
+    throw notFound("Enrichment not found");
   }
 
-  if (!canApprove(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (record.status !== "awaiting_approval") {
+    throw new HttpError("Enrichment is not awaiting approval", 409);
   }
 
-  const enrichment = await prisma.enrichment.findUnique({
-    where: { id: context.params.id },
-    include: { contact: true }
-  });
+  const now = new Date();
 
-  if (!enrichment) {
-    return NextResponse.json({ error: "Enrichment not found" }, { status: 404 });
-  }
-
-  if (enrichment.status !== "awaiting_approval") {
-    return NextResponse.json(
-      { error: "Enrichment not awaiting approval" },
-      { status: 400 }
-    );
-  }
-
-  const body = (await request.json().catch(() => ({}))) as {
-    reason?: string;
-  };
-
-  const updated = await prisma.enrichment.update({
-    where: { id: enrichment.id },
-    data: {
+  await db
+    .update(enrichments)
+    .set({
       status: "rejected",
-      error: body.reason ?? null,
-      decidedByUserId: session.user.id,
-      decidedAt: new Date()
+      error: reason,
+      decidedByUserId: dbUser.id,
+      decidedAt: now
+    })
+    .where(eq(enrichments.id, id));
+
+  await logEvent({
+    contactId: record.contactId,
+    enrichmentId: record.id,
+    type: "rejected",
+    payload: {
+      userId: dbUser.id,
+      reason
     }
   });
 
-  await recordEvent({
-    type: EventType.rejected,
-    contactId: updated.contactId,
-    enrichmentId: updated.id,
-    payload: { userId: session.user.id, reason: body.reason ?? null }
-  });
-
-  return NextResponse.json({ enrichment: updated });
-}
+  return {
+    success: true
+  };
+});

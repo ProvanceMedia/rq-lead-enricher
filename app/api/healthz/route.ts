@@ -1,37 +1,12 @@
-import { NextResponse } from "next/server";
-
-import { prisma } from "@/lib/prisma";
-import { connection } from "@/lib/queue";
+import { sql } from "drizzle-orm";
+import { db } from "@/db/client";
 
 export async function GET() {
-  if (process.env.SKIP_ENV_VALIDATION === "true") {
-    return NextResponse.json({
-      ok: true,
-      db: false,
-      redis: false,
-      note: "Skipped during build phase"
-    });
-  }
-
   try {
-    await prisma.$queryRaw`SELECT 1`;
-    await connection.ping();
-
-    return NextResponse.json({
-      ok: true,
-      db: true,
-      redis: true
-    });
+    await db.execute(sql`select 1`);
+    return Response.json({ ok: true, db: true });
   } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        db: false,
-        redis: false,
-        error:
-          error instanceof Error ? error.message : "unknown health check error"
-      },
-      { status: 500 }
-    );
+    console.error("Health check failed", error);
+    return Response.json({ ok: false, db: false }, { status: 500 });
   }
 }

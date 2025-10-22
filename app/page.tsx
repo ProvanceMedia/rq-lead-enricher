@@ -1,5 +1,14 @@
-import { redirect } from "next/navigation";
+"use client";
 
-export default function HomePage() {
-  redirect("/queue");
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function IndexPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/queue");
+  }, [router]);
+
+  return null;
 }

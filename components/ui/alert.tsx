@@ -1,55 +1,26 @@
-import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
+"use client";
 
+import * as React from "react";
 import { cn } from "@/lib/utils";
 
-const alertVariants = cva(
-  "relative w-full rounded-lg border p-4 [&>*]:mb-0 [&>*+*]:mt-2",
-  {
-    variants: {
-      variant: {
-        default: "bg-background text-foreground",
-        destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive"
-      }
-    },
-    defaultVariants: {
-      variant: "default"
-    }
-  }
+type AlertProps = React.HTMLAttributes<HTMLDivElement> & {
+  variant?: "default" | "destructive" | "success";
+};
+
+const variants: Record<NonNullable<AlertProps["variant"]>, string> = {
+  default: "border-slate-200 text-slate-700 bg-slate-50",
+  destructive: "border-red-200 bg-red-50 text-red-700",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-700"
+};
+
+export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
+  ({ className, variant = "default", ...props }, ref) => (
+    <div
+      ref={ref}
+      role="alert"
+      className={cn("rounded-md border px-4 py-3 text-sm", variants[variant], className)}
+      {...props}
+    />
+  )
 );
-
-const Alert = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof alertVariants>
->(({ className, variant, ...props }, ref) => (
-  <div
-    ref={ref}
-    role="alert"
-    className={cn(alertVariants({ variant }), className)}
-    {...props}
-  />
-));
 Alert.displayName = "Alert";
-
-const AlertTitle = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLHeadingElement>
->(({ className, ...props }, ref) => (
-  <h5 ref={ref} className={cn("text-sm font-medium", className)} {...props} />
-));
-AlertTitle.displayName = "AlertTitle";
-
-const AlertDescription = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
-    {...props}
-  />
-));
-AlertDescription.displayName = "AlertDescription";
-
-export { Alert, AlertTitle, AlertDescription };

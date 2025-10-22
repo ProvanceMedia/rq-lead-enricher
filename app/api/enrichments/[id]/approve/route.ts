@@ -1,88 +1,110 @@
-import { NextResponse } from "next/server";
-import { EventType } from "@prisma/client";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { contacts, enrichments } from "@/db/schema";
+import { withErrorHandling } from "@/lib/api-handler";
+import { requireUser } from "@/lib/auth";
+import { logEvent } from "@/lib/events";
+import { syncHubspotContact } from "@/lib/hubspot";
+import { HttpError, notFound } from "@/lib/errors";
 
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { canApprove } from "@/lib/roles";
-import { recordEvent } from "@/lib/events";
-import { updateQueue } from "@/lib/queue";
+export const POST = withErrorHandling(async ({ context }) => {
+  const { dbUser, clerkUser } = await requireUser(["admin", "operator"]);
+  const id = context?.params?.id as string | undefined;
 
-interface RouteContext {
-  params: {
-    id: string;
-  };
-}
-
-export async function POST(_request: Request, context: RouteContext) {
-  if (process.env.SKIP_ENV_VALIDATION === "true") {
-    return NextResponse.json(
-      { error: "Approvals disabled during build" },
-      { status: 503 }
-    );
+  if (!id) {
+    throw notFound("Enrichment not found");
   }
 
-  const session = await auth();
+  const [record] = await db
+    .select({
+      enrichment: enrichments,
+      contact: contacts
+    })
+    .from(enrichments)
+    .innerJoin(contacts, eq(enrichments.contactId, contacts.id))
+    .where(eq(enrichments.id, id))
+    .limit(1);
 
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!record) {
+    throw notFound("Enrichment not found");
   }
 
-  if (!canApprove(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (record.enrichment.status !== "awaiting_approval") {
+    throw new HttpError("Enrichment is not awaiting approval", 409);
   }
 
-  const enrichment = await prisma.enrichment.findUnique({
-    where: { id: context.params.id },
-    include: { contact: true }
-  });
-
-  if (!enrichment) {
-    return NextResponse.json({ error: "Enrichment not found" }, { status: 404 });
-  }
-
-  if (enrichment.status !== "awaiting_approval") {
-    return NextResponse.json(
-      { error: "Enrichment not awaiting approval" },
-      { status: 400 }
-    );
-  }
-
-  const updated = await prisma.enrichment.update({
-    where: { id: enrichment.id },
-    data: {
-      status: "approved",
-      decidedByUserId: session.user.id,
-      decidedAt: new Date()
+  await logEvent({
+    contactId: record.contact.id,
+    enrichmentId: record.enrichment.id,
+    type: "approved",
+    payload: {
+      userId: dbUser.id,
+      userEmail: dbUser.email,
+      userName: clerkUser.fullName
     }
   });
 
-  await recordEvent({
-    type: EventType.approved,
-    contactId: updated.contactId,
-    enrichmentId: updated.id,
-    payload: { userId: session.user.id }
+  const hubspotResult = await syncHubspotContact({
+    contact: record.contact,
+    enrichment: record.enrichment
   });
 
-  await updateQueue.add(
-    "hubspot-update",
-    {
-      enrichmentId: updated.id
-    },
-    {
-      attempts: 5,
-      backoff: {
-        type: "exponential",
-        delay: 2000
+  const now = new Date();
+  const statusToSet =
+    hubspotResult.status === "failed"
+      ? "error"
+      : hubspotResult.status === "success"
+        ? "updated"
+        : "approved";
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(enrichments)
+      .set({
+        status: statusToSet,
+        decidedByUserId: dbUser.id,
+        decidedAt: now,
+        error: hubspotResult.status === "failed" ? hubspotResult.reason : null
+      })
+      .where(eq(enrichments.id, record.enrichment.id));
+
+    if (hubspotResult.status === "success") {
+      await tx
+        .update(contacts)
+        .set({ hubspotContactId: hubspotResult.id })
+        .where(eq(contacts.id, record.contact.id));
+    }
+  });
+
+  if (hubspotResult.status === "failed") {
+    await logEvent({
+      contactId: record.contact.id,
+      enrichmentId: record.enrichment.id,
+      type: "failed",
+      payload: {
+        target: "hubspot",
+        reason: hubspotResult.reason
       }
-    }
-  );
+    });
+    return {
+      success: false,
+      status: hubspotResult.status,
+      message: hubspotResult.reason
+    };
+  }
 
-  await recordEvent({
-    type: EventType.queued_for_update,
-    contactId: updated.contactId,
-    enrichmentId: updated.id,
-    payload: { queue: "updateQueue" }
+  await logEvent({
+    contactId: record.contact.id,
+    enrichmentId: record.enrichment.id,
+    type: "hubspot_updated",
+    payload: {
+      status: hubspotResult.status,
+      hubspotId: hubspotResult.status === "success" ? hubspotResult.id : undefined
+    }
   });
 
-  return NextResponse.json({ enrichment: updated });
-}
+  return {
+    success: true,
+    status: hubspotResult.status
+  };
+});
