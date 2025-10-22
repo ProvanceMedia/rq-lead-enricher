@@ -6,9 +6,11 @@ import { requireUser } from "@/lib/auth";
 import { logEvent } from "@/lib/events";
 import { notFound } from "@/lib/errors";
 
-export const POST = withErrorHandling(async ({ context }) => {
-  const { dbUser } = await requireUser(["admin", "operator"]);
-  const contactId = context?.params?.id as string | undefined;
+export const POST = withErrorHandling<{ params: Promise<{ id: string }> }>(
+  async ({ context }) => {
+    const { dbUser } = await requireUser(["admin", "operator"]);
+    const params = await context.params;
+    const contactId = params.id;
 
   if (!contactId) {
     throw notFound("Contact not found");
@@ -42,8 +44,9 @@ export const POST = withErrorHandling(async ({ context }) => {
     }
   });
 
-  return {
-    success: true,
-    enrichmentId: enrichment.id
-  };
-});
+    return {
+      success: true,
+      enrichmentId: enrichment.id
+    };
+  }
+);

@@ -7,9 +7,11 @@ import { logEvent } from "@/lib/events";
 import { syncHubspotContact } from "@/lib/hubspot";
 import { HttpError, notFound } from "@/lib/errors";
 
-export const POST = withErrorHandling(async ({ context }) => {
-  const { dbUser, clerkUser } = await requireUser(["admin", "operator"]);
-  const id = context?.params?.id as string | undefined;
+export const POST = withErrorHandling<{ params: Promise<{ id: string }> }>(
+  async ({ context }) => {
+    const { dbUser, clerkUser } = await requireUser(["admin", "operator"]);
+    const params = await context.params;
+    const id = params.id;
 
   if (!id) {
     throw notFound("Enrichment not found");
@@ -103,8 +105,9 @@ export const POST = withErrorHandling(async ({ context }) => {
     }
   });
 
-  return {
-    success: true,
-    status: hubspotResult.status
-  };
-});
+    return {
+      success: true,
+      status: hubspotResult.status
+    };
+  }
+);

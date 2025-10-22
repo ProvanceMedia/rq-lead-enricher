@@ -32,15 +32,16 @@ export async function listEnrichmentsWithContacts(filters: EnrichmentFilters) {
 
   if (filters.search) {
     const pattern = `%${filters.search}%`;
-    clauses.push(
-      or(
-        ilike(contacts.company, pattern),
-        ilike(contacts.email, pattern),
-        ilike(contacts.firstName, pattern),
-        ilike(contacts.lastName, pattern),
-        ilike(enrichments.psLine, pattern)
-      )
+    const searchClause = or(
+      ilike(contacts.company, pattern),
+      ilike(contacts.email, pattern),
+      ilike(contacts.firstName, pattern),
+      ilike(contacts.lastName, pattern),
+      ilike(enrichments.psLine, pattern)
     );
+    if (searchClause) {
+      clauses.push(searchClause);
+    }
   }
 
   if (filters.from) {

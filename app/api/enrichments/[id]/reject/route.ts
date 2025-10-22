@@ -10,9 +10,11 @@ type RejectBody = {
   reason?: string;
 };
 
-export const POST = withErrorHandling(async ({ request, context }) => {
-  const { dbUser } = await requireUser(["admin", "operator"]);
-  const id = context?.params?.id as string | undefined;
+export const POST = withErrorHandling<{ params: Promise<{ id: string }> }>(
+  async ({ request, context }) => {
+    const { dbUser } = await requireUser(["admin", "operator"]);
+    const params = await context.params;
+    const id = params.id;
 
   if (!id) {
     throw notFound("Enrichment not found");
@@ -57,7 +59,8 @@ export const POST = withErrorHandling(async ({ request, context }) => {
     }
   });
 
-  return {
-    success: true
-  };
-});
+    return {
+      success: true
+    };
+  }
+);
