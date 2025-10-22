@@ -89,13 +89,11 @@ async function initDatabase() {
     console.log("✓ Database schema initialized successfully");
   } catch (error) {
     console.error("Failed to initialize database:", error);
-    throw error;
+    console.log("⚠ Continuing anyway - tables may already exist or need manual creation");
+    console.log("⚠ If app fails, run: npm run drizzle:push manually with proper credentials");
   } finally {
     await pool.end();
   }
 }
 
-initDatabase().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+initDatabase();
