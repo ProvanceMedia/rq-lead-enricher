@@ -193,14 +193,25 @@ export class ApolloService {
       email?: string;
       organization_name?: string;
       domain?: string;
+      id?: string;
     }>,
-    webhookUrl: string
+    webhookUrl: string,
+    options?: {
+      revealEmail?: boolean;
+      revealPhoneNumber?: boolean;
+      revealPersonalEmails?: boolean;
+    }
   ): Promise<{ id: string; status: string; matches?: any[] } | null> {
     try {
-      const params: Record<string, any> = {
-        reveal_personal_emails: true,
-        reveal_phone_number: true,
-      };
+      const params: Record<string, any> = {};
+
+      if (options?.revealEmail) {
+        params.reveal_email = true;
+      }
+
+      if (options?.revealPhoneNumber) {
+        params.reveal_phone_number = true;
+      }
 
       if (webhookUrl) {
         params.webhook_url = webhookUrl;
@@ -273,14 +284,28 @@ export class ApolloService {
     organization_name?: string;
     domain?: string;
     webhook_url?: string;
+    reveal_email?: boolean;
+    reveal_phone_number?: boolean;
   }): Promise<any | null> {
     try {
-      const { webhook_url, person_id, id, ...body } = person;
+      const {
+        webhook_url,
+        person_id,
+        id,
+        reveal_email,
+        reveal_phone_number,
+        ...body
+      } = person;
 
-      const params: Record<string, any> = {
-        reveal_personal_emails: true,
-        reveal_phone_number: true,
-      };
+      const params: Record<string, any> = {};
+
+      if (reveal_email) {
+        params.reveal_email = true;
+      }
+
+      if (reveal_phone_number) {
+        params.reveal_phone_number = true;
+      }
 
       if (webhook_url) {
         params.webhook_url = webhook_url;

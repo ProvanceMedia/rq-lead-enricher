@@ -5,6 +5,9 @@ import { ApolloService } from '@/lib/services/apollo';
 
 export const dynamic = 'force-dynamic';
 
+const isPlaceholderEmail = (email?: string | null) =>
+  typeof email === 'string' && /email[_-]?not[_-]?unlocked@/i.test(email);
+
 /**
  * Send approved prospects to Hub Spot
  *
@@ -75,6 +78,8 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`Enriching single prospect via Apollo ID ${prospect.apolloId}`);
 
+        const shouldRevealEmail = !prospect.email || isPlaceholderEmail(prospect.email);
+
         // Log activity for auditing
         await db.insert(enrichmentActivity).values({
           prospectId: prospect.id,
@@ -82,6 +87,7 @@ export async function POST(request: NextRequest) {
           details: {
             mode: 'single',
             apolloId: prospect.apolloId,
+            revealEmail: shouldRevealEmail,
           },
           performedBy: 'user',
         });
@@ -102,6 +108,8 @@ export async function POST(request: NextRequest) {
           organization_name: prospect.companyName || undefined,
           domain: prospect.companyDomain || undefined,
           webhook_url: webhookUrl,
+          reveal_email: shouldRevealEmail,
+          reveal_phone_number: true,
         });
 
         if (!enrichmentResponse) {
@@ -177,6 +185,10 @@ export async function POST(request: NextRequest) {
     console.log(`Sending ${selectedProspects.length} prospects to Apollo for enrichment`);
     console.log(`Webhook URL: ${webhookUrl}`);
 
+    const shouldRevealEmailBatch = selectedProspects.some(
+      (prospect) => !prospect.email || isPlaceholderEmail(prospect.email)
+    );
+
     // Prepare people for Apollo bulk enrichment - pass Apollo ID when available
     const people = selectedProspects.map((p) => ({
       id: p.apolloId || undefined,
@@ -189,7 +201,10 @@ export async function POST(request: NextRequest) {
 
     try {
       // Trigger Apollo bulk enrichment
-      const enrichmentResult = await apollo.bulkEnrichPeople(people, webhookUrl);
+      const enrichmentResult = await apollo.bulkEnrichPeople(people, webhookUrl, {
+        revealEmail: shouldRevealEmailBatch,
+        revealPhoneNumber: true,
+      });
 
       if (!enrichmentResult) {
         throw new Error('Apollo bulk enrichment failed to start');
