@@ -38,7 +38,8 @@ export async function processApolloMatches(matches: any[]) {
       }, null, 2));
 
       // Extract enriched data from Apollo response
-      const enrichedEmail = match.email || prospect.email; // Use enriched email or fall back to original
+      // Apollo puts revealed emails in personal_emails array, not in email field!
+      const enrichedEmail = match.personal_emails?.[0] || match.email || prospect.email;
       const workPhone = match.phone_numbers?.find((p: any) =>
         p.type === 'work' && p.status === 'valid'
       )?.sanitized_number;
