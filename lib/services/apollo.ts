@@ -197,25 +197,31 @@ export class ApolloService {
     webhookUrl: string
   ): Promise<{ id: string; status: string; matches?: any[] } | null> {
     try {
-      const requestBody = {
-        details: people,
-        webhook_url: webhookUrl,
+      const params: Record<string, any> = {
         reveal_personal_emails: true,
         reveal_phone_number: true,
       };
 
-      console.log('Apollo bulk enrichment REQUEST:', JSON.stringify(requestBody, null, 2));
+      if (webhookUrl) {
+        params.webhook_url = webhookUrl;
+      }
 
-      const response = await this.client.post(
-        '/people/bulk_match',
-        requestBody,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-          },
-        }
+      const requestBody = {
+        details: people,
+      };
+
+      console.log(
+        'Apollo bulk enrichment REQUEST:',
+        JSON.stringify({ params, body: requestBody }, null, 2)
       );
+
+      const response = await this.client.post('/people/bulk_match', requestBody, {
+        params,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+      });
 
       console.log('Apollo bulk enrichment RESPONSE:', JSON.stringify(response.data, null, 2));
 
@@ -259,30 +265,48 @@ export class ApolloService {
    * @returns Enriched person data
    */
   async enrichPerson(person: {
+    id?: string;
     person_id?: string;
     first_name?: string;
     last_name?: string;
     email?: string;
     organization_name?: string;
     domain?: string;
+    webhook_url?: string;
   }): Promise<any | null> {
     try {
-      const response = await this.client.post(
-        '/people/match',
-        {
-          ...person,
-          reveal_personal_emails: true,
-          reveal_phone_number: true,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
-          },
-        }
+      const { webhook_url, person_id, id, ...body } = person;
+
+      const params: Record<string, any> = {
+        reveal_personal_emails: true,
+        reveal_phone_number: true,
+      };
+
+      if (webhook_url) {
+        params.webhook_url = webhook_url;
+      }
+
+      const effectiveId = person_id || id;
+      if (effectiveId) {
+        params.id = effectiveId;
+      }
+
+      console.log(
+        'Apollo single enrichment REQUEST:',
+        JSON.stringify({ params, body }, null, 2)
       );
 
-      return response.data.person || null;
+      const response = await this.client.post('/people/match', body, {
+        params,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+      });
+
+      console.log('Apollo single enrichment RESPONSE:', JSON.stringify(response.data, null, 2));
+
+      return response.data || null;
     } catch (error: any) {
       console.error('Apollo person enrichment error:', error.response?.data || error.message);
       return null;
