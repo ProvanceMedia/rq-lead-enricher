@@ -28,13 +28,14 @@ interface Prospect {
   hubspotContactId: string | null;
 }
 
-type TabType = 'discovered' | 'in_hubspot' | 'awaiting';
+type TabType = 'discovered' | 'in_hubspot' | 'awaiting' | 'approved';
 
 export function QueueClient() {
   const [activeTab, setActiveTab] = useState<TabType>('discovered');
   const [enrichments, setEnrichments] = useState<EnrichmentWithProspect[]>([]);
   const [discoveredProspects, setDiscoveredProspects] = useState<Prospect[]>([]);
   const [hubspotProspects, setHubspotProspects] = useState<Prospect[]>([]);
+  const [approvedProspects, setApprovedProspects] = useState<Prospect[]>([]);
   const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
@@ -64,6 +65,18 @@ export function QueueClient() {
     }
   };
 
+  const fetchApprovedProspects = async () => {
+    try {
+      const res = await fetch('/api/prospects/pending?status=enriched');
+      const data = await res.json();
+      if (data.success) {
+        setApprovedProspects(data.prospects);
+      }
+    } catch (error) {
+      console.error('Error fetching approved prospects:', error);
+    }
+  };
+
   const fetchEnrichments = async () => {
     try {
       const res = await fetch('/api/enrichments/awaiting');
@@ -83,6 +96,8 @@ export function QueueClient() {
         await fetchHubSpotProspects();
       } else if (activeTab === 'awaiting') {
         await fetchEnrichments();
+      } else if (activeTab === 'approved') {
+        await fetchApprovedProspects();
       }
     } finally {
       setLoading(false);
@@ -324,6 +339,16 @@ export function QueueClient() {
         >
           Awaiting Approval ({enrichments.length})
         </button>
+        <button
+          onClick={() => setActiveTab('approved')}
+          className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+            activeTab === 'approved'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Approved ({approvedProspects.length})
+        </button>
       </div>
 
       {loading ? (
@@ -470,8 +495,8 @@ export function QueueClient() {
                         </div>
                       </TableCell>
                       <TableCell>{prospect.companyName}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {prospect.hubspotContactId?.substring(0, 12)}...
+                      <TableCell className="text-sm text-muted-foreground font-mono">
+                        {prospect.hubspotContactId}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -493,15 +518,15 @@ export function QueueClient() {
             </Card>
           )}
         </>
-      ) : enrichments.length === 0 ? (
-        /* Awaiting Approval Tab - Empty State */
-        <Card>
-          <CardContent className="p-8">
-            <p className="text-center text-muted-foreground">No enrichments awaiting approval</p>
-          </CardContent>
-        </Card>
-      ) : (
-        /* Awaiting Approval Tab - With Data */
+      ) : activeTab === 'awaiting' ? (
+        /* Awaiting Approval Tab */
+        enrichments.length === 0 ? (
+          <Card>
+            <CardContent className="p-8">
+              <p className="text-center text-muted-foreground">No enrichments awaiting approval</p>
+            </CardContent>
+          </Card>
+        ) : (
         <div className="space-y-4">
           {enrichments.map(({ enrichment, prospect }) => (
             <Card key={enrichment.id}>
@@ -600,6 +625,56 @@ export function QueueClient() {
             </Card>
           ))}
         </div>
+        )
+      ) : (
+        /* Approved Tab */
+        approvedProspects.length === 0 ? (
+          <Card>
+            <CardContent className="p-8">
+              <p className="text-center text-muted-foreground">No approved prospects</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>HubSpot ID</TableHead>
+                  <TableHead>Approved</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {approvedProspects.map((prospect) => (
+                  <TableRow key={prospect.id}>
+                    <TableCell>
+                      {prospect.firstName} {prospect.lastName}
+                    </TableCell>
+                    <TableCell>{prospect.email}</TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {prospect.phone && <div>{prospect.phone}</div>}
+                        {prospect.mobilePhone && <div className="text-muted-foreground">{prospect.mobilePhone}</div>}
+                      </div>
+                    </TableCell>
+                    <TableCell>{prospect.companyName}</TableCell>
+                    <TableCell>{prospect.title}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground font-mono">
+                      {prospect.hubspotContactId}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDate(prospect.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )
       )}
     </div>
   );

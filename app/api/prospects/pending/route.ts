@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || 'discovered';
 
     // Validate status
-    const validStatuses = ['discovered', 'in_hubspot', 'apollo_enriching', 'enriching'];
+    const validStatuses = ['discovered', 'in_hubspot', 'apollo_enriching', 'enriching', 'enriched'];
     if (!validStatuses.includes(status)) {
       return NextResponse.json(
         { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },
