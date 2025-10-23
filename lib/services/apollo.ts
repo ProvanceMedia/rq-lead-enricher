@@ -209,6 +209,10 @@ export class ApolloService {
         params.reveal_email = true;
       }
 
+      if (options?.revealPersonalEmails) {
+        params.reveal_personal_emails = true;
+      }
+
       if (options?.revealPhoneNumber) {
         params.reveal_phone_number = true;
       }
@@ -285,6 +289,7 @@ export class ApolloService {
     domain?: string;
     webhook_url?: string;
     reveal_email?: boolean;
+    reveal_personal_emails?: boolean;
     reveal_phone_number?: boolean;
   }): Promise<any | null> {
     try {
@@ -293,6 +298,7 @@ export class ApolloService {
         person_id,
         id,
         reveal_email,
+        reveal_personal_emails,
         reveal_phone_number,
         ...body
       } = person;
@@ -301,6 +307,10 @@ export class ApolloService {
 
       if (reveal_email) {
         params.reveal_email = true;
+      }
+
+      if (reveal_personal_emails) {
+        params.reveal_personal_emails = true;
       }
 
       if (reveal_phone_number) {

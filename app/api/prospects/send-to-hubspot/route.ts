@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
           domain: prospect.companyDomain || undefined,
           webhook_url: webhookUrl,
           reveal_email: shouldRevealEmail,
+          reveal_personal_emails: true,
           reveal_phone_number: true,
         });
 
@@ -203,6 +204,7 @@ export async function POST(request: NextRequest) {
       // Trigger Apollo bulk enrichment
       const enrichmentResult = await apollo.bulkEnrichPeople(people, webhookUrl, {
         revealEmail: shouldRevealEmailBatch,
+        revealPersonalEmails: true,
         revealPhoneNumber: true,
       });
 
