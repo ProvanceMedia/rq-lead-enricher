@@ -65,7 +65,7 @@ export default function HomePage() {
 
       if (result.success) {
         toast.success('Discovery completed!', {
-          description: `Discovered ${result.discovered} new prospects. Created: ${result.created}, Duplicates skipped: ${result.duplicates}`,
+          description: `Created: ${result.created} new prospects, Skipped: ${result.skipped} duplicates${result.errors > 0 ? `, Errors: ${result.errors}` : ''}`,
         });
         fetchStats();
       } else {
