@@ -124,8 +124,26 @@ export async function POST(request: NextRequest) {
 
         if (matches && matches.length > 0) {
           console.log(
-            `Apollo single enrichment returned ${matches.length} immediate match(es); waiting for webhook for final revealed data.`
+            `Apollo single enrichment returned ${matches.length} immediate match(es). Processing emails immediately.`
           );
+
+          // Process the synchronous match immediately (email is here!)
+          const { processApolloMatches } = await import('@/lib/services/apollo-webhook-processor');
+          const result = await processApolloMatches(matches);
+
+          console.log(`Processed single match: ${result.created} created in HubSpot, ${result.failed} failed`);
+
+          return NextResponse.json({
+            success: true,
+            enrichmentId: enrichmentResponse.id || 'sync-' + Date.now(),
+            prospectCount: 1,
+            processed: result.processed,
+            created: result.created,
+            failed: result.failed,
+            message: result.created > 0
+              ? 'Prospect enriched and HubSpot contact created with revealed email.'
+              : 'Failed to process enrichment.',
+          });
         }
 
         if (enrichmentResponse.id) {
@@ -142,14 +160,14 @@ export async function POST(request: NextRequest) {
             success: true,
             enrichmentId: enrichmentResponse.id,
             prospectCount: 1,
-            message: 'Apollo enrichment started. Results will be processed automatically once ready.',
+            message: 'Apollo enrichment started. Phone numbers will be processed automatically when ready.',
           });
         }
 
         return NextResponse.json({
           success: true,
           prospectCount: 1,
-          message: 'Apollo enrichment requested. Waiting for webhook callback with revealed data.',
+          message: 'Apollo enrichment requested. Waiting for webhook callback with phone data.',
         });
       } catch (apolloError: any) {
         console.error('Apollo single enrichment error:', apolloError);
@@ -214,14 +232,30 @@ export async function POST(request: NextRequest) {
 
       console.log(`Apollo bulk enrichment result: ${enrichmentResult.id}, status: ${enrichmentResult.status}`);
 
-      // Check if we got synchronous results
+      // Check if we got synchronous results (emails are returned immediately)
       if (enrichmentResult.matches && enrichmentResult.matches.length > 0) {
         console.log(
-          `Apollo bulk enrichment returned ${enrichmentResult.matches.length} synchronous match(es); waiting for webhook for final revealed data.`
+          `Apollo returned ${enrichmentResult.matches.length} synchronous match(es). Processing emails immediately.`
         );
+
+        // Process the synchronous matches immediately (emails are here!)
+        const { processApolloMatches } = await import('@/lib/services/apollo-webhook-processor');
+        const result = await processApolloMatches(enrichmentResult.matches);
+
+        console.log(`Processed ${result.processed} matches: ${result.created} created in HubSpot, ${result.failed} failed`);
+
+        return NextResponse.json({
+          success: true,
+          enrichmentId: enrichmentResult.id,
+          prospectCount: selectedProspects.length,
+          processed: result.processed,
+          created: result.created,
+          failed: result.failed,
+          message: `Processed ${result.created} prospects and created HubSpot contacts with revealed emails.`,
+        });
       }
 
-      // Async response - update status and wait for webhook
+      // Async response - update status and wait for webhook (phone numbers only)
       await db
         .update(prospects)
         .set({
@@ -248,7 +282,7 @@ export async function POST(request: NextRequest) {
         success: true,
         enrichmentId: enrichmentResult.id,
         prospectCount: selectedProspects.length,
-        message: `Apollo enrichment started for ${selectedProspects.length} prospects. Results will be sent to HubSpot automatically when ready.`,
+        message: `Apollo enrichment started for ${selectedProspects.length} prospects. Phone numbers will be sent to HubSpot automatically when ready.`,
       });
     } catch (apolloError: any) {
       console.error('Apollo enrichment error:', apolloError);
