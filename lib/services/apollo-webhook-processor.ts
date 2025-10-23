@@ -70,7 +70,7 @@ export async function processApolloMatches(matches: any[]) {
           company: prospect.companyName || undefined,
           website: prospect.companyDomain || undefined,
           jobtitle: prospect.title || undefined,
-          lifecyclestage: '1101494862', // New Prospect ID in HubSpot
+          lifecyclestage: '1101494863', // Enriched Prospect ID in HubSpot
         });
 
         // Update prospect with HubSpot ID
