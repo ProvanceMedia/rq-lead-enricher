@@ -95,7 +95,7 @@ export const enrichments = pgTable('enrichments', {
 // Enrichment activity log - audit trail
 export const enrichmentActivity = pgTable('enrichment_activity', {
   id: text('id').primaryKey().$defaultFn(() => createId()),
-  enrichmentId: text('enrichment_id').references(() => enrichments.id).notNull(),
+  enrichmentId: text('enrichment_id').references(() => enrichments.id),
   prospectId: text('prospect_id').references(() => prospects.id).notNull(),
   action: text('action').notNull(), // 'created', 'enrichment_started', 'enrichment_completed', 'approved', 'rejected', 'hubspot_updated', 'failed'
   details: jsonb('details'), // Additional context
