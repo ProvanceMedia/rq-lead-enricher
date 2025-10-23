@@ -78,17 +78,21 @@ export class ApolloService {
 
   async searchPeople(criteria: ApolloSearchCriteria): Promise<ApolloContact[]> {
     try {
+      const requestBody = {
+        page: criteria.page || 1,
+        per_page: criteria.perPage || 25,
+        person_titles: criteria.personTitles,
+        organization_num_employees_ranges: criteria.organizationNumEmployeesRanges,
+        organization_locations: criteria.organizationLocations,
+        organization_industry_tag_ids: criteria.organizationIndustryTagIds,
+        contact_email_status: criteria.contactEmailStatus || ['verified'],
+      };
+
+      console.log('Apollo search request:', JSON.stringify(requestBody, null, 2));
+
       const response = await this.client.post(
         '/mixed_people/search',
-        {
-          page: criteria.page || 1,
-          per_page: criteria.perPage || 25,
-          person_titles: criteria.personTitles,
-          organization_num_employees_ranges: criteria.organizationNumEmployeesRanges,
-          organization_locations: criteria.organizationLocations,
-          organization_industry_tag_ids: criteria.organizationIndustryTagIds,
-          contact_email_status: criteria.contactEmailStatus || ['verified'],
-        },
+        requestBody,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -96,6 +100,11 @@ export class ApolloService {
           },
         }
       );
+
+      console.log(`Apollo returned ${response.data.people?.length || 0} people`);
+      if (response.data.people?.length > 0) {
+        console.log('Sample location from first result:', response.data.people[0].organization?.country);
+      }
 
       return response.data.people || [];
     } catch (error: any) {
