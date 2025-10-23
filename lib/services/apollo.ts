@@ -197,14 +197,18 @@ export class ApolloService {
     webhookUrl: string
   ): Promise<{ id: string; status: string; matches?: any[] } | null> {
     try {
+      const requestBody = {
+        details: people,
+        webhook_url: webhookUrl,
+        reveal_personal_emails: true,
+        reveal_phone_number: true,
+      };
+
+      console.log('Apollo bulk enrichment REQUEST:', JSON.stringify(requestBody, null, 2));
+
       const response = await this.client.post(
         '/people/bulk_match',
-        {
-          details: people,
-          webhook_url: webhookUrl,
-          reveal_personal_emails: true,
-          reveal_phone_number: true,
-        },
+        requestBody,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -213,7 +217,7 @@ export class ApolloService {
         }
       );
 
-      console.log('Apollo bulk enrichment response:', JSON.stringify(response.data, null, 2));
+      console.log('Apollo bulk enrichment RESPONSE:', JSON.stringify(response.data, null, 2));
 
       // Apollo may return results immediately for small batches
       // Response format can be:

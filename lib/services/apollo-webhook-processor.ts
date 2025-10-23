@@ -27,6 +27,16 @@ export async function processApolloMatches(matches: any[]) {
         continue;
       }
 
+      // Log the full match object to see what Apollo is returning
+      console.log(`Processing match for Apollo ID ${match.id}:`, JSON.stringify({
+        id: match.id,
+        email: match.email,
+        personal_emails: match.personal_emails,
+        phone_numbers: match.phone_numbers,
+        mobile_phone: match.mobile_phone,
+        employment_history: match.employment_history?.[0],
+      }, null, 2));
+
       // Extract enriched data from Apollo response
       const enrichedEmail = match.email || prospect.email; // Use enriched email or fall back to original
       const workPhone = match.phone_numbers?.find((p: any) =>
@@ -34,6 +44,8 @@ export async function processApolloMatches(matches: any[]) {
       )?.sanitized_number;
 
       const mobilePhone = match.mobile_phone;
+
+      console.log(`Extracted data - Email: ${enrichedEmail}, Work Phone: ${workPhone}, Mobile: ${mobilePhone}`);
 
       // Update prospect with enriched data
       await db
