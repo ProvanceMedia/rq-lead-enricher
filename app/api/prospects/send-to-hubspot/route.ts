@@ -83,9 +83,28 @@ export async function POST(request: NextRequest) {
         throw new Error('Apollo bulk enrichment failed to start');
       }
 
-      console.log(`Apollo bulk enrichment started: ${enrichmentResult.id}`);
+      console.log(`Apollo bulk enrichment result: ${enrichmentResult.id}, status: ${enrichmentResult.status}`);
 
-      // Update all prospects to 'apollo_enriching' status
+      // Check if we got synchronous results
+      if (enrichmentResult.matches && enrichmentResult.matches.length > 0) {
+        console.log(`Got ${enrichmentResult.matches.length} matches synchronously, processing immediately...`);
+
+        // Process matches immediately using shared logic
+        const { processApolloMatches } = await import('@/lib/services/apollo-webhook-processor');
+        const result = await processApolloMatches(enrichmentResult.matches);
+
+        return NextResponse.json({
+          success: true,
+          enrichmentId: enrichmentResult.id,
+          prospectCount: selectedProspects.length,
+          processed: result.processed,
+          created: result.created,
+          failed: result.failed,
+          message: `Apollo enrichment completed! ${result.created} prospect(s) added to HubSpot.`,
+        });
+      }
+
+      // Async response - update status and wait for webhook
       await db
         .update(prospects)
         .set({

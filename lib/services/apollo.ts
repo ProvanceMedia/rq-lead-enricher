@@ -184,7 +184,7 @@ export class ApolloService {
       domain?: string;
     }>,
     webhookUrl: string
-  ): Promise<{ id: string; status: string } | null> {
+  ): Promise<{ id: string; status: string; matches?: any[] } | null> {
     try {
       const response = await this.client.post(
         '/people/bulk_match',
@@ -202,16 +202,34 @@ export class ApolloService {
         }
       );
 
-      // Response format:
-      // {
-      //   "id": "bulk_enrichment_id",
-      //   "status": "processing"
-      // }
+      console.log('Apollo bulk enrichment response:', JSON.stringify(response.data, null, 2));
 
-      return {
-        id: response.data.id,
-        status: response.data.status || 'processing',
-      };
+      // Apollo may return results immediately for small batches
+      // Response format can be:
+      // { "matches": [...] } - synchronous response
+      // or
+      // { "id": "bulk_enrichment_id", "status": "processing" } - async with webhook
+
+      if (response.data.matches) {
+        // Synchronous response - return matches directly
+        return {
+          id: 'sync-' + Date.now(),
+          status: 'completed',
+          matches: response.data.matches,
+        };
+      } else if (response.data.id) {
+        // Async response - webhook will be called
+        return {
+          id: response.data.id,
+          status: response.data.status || 'processing',
+        };
+      } else {
+        console.warn('Unexpected Apollo response format:', response.data);
+        return {
+          id: 'unknown-' + Date.now(),
+          status: 'unknown',
+        };
+      }
     } catch (error: any) {
       console.error('Apollo bulk enrichment error:', error.response?.data || error.message);
       throw new Error(`Failed to start bulk enrichment: ${error.message}`);
