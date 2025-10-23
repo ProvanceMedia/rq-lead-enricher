@@ -18,14 +18,16 @@ export function SettingsClient() {
 
   // Apollo search criteria fields
   const [personTitles, setPersonTitles] = useState<string[]>([]);
-  const [locations, setLocations] = useState<string[]>([]);
+  const [personLocations, setPersonLocations] = useState<string[]>([]); // Where people live
+  const [organizationLocations, setOrganizationLocations] = useState<string[]>([]); // Company HQ
   const [keywords, setKeywords] = useState<string[]>([]);
   const [companySizes, setCompanySizes] = useState<string[]>([]);
   const [emailStatus, setEmailStatus] = useState('verified');
 
   // Temp input states
   const [newTitle, setNewTitle] = useState('');
-  const [newLocation, setNewLocation] = useState('');
+  const [newPersonLocation, setNewPersonLocation] = useState('');
+  const [newOrgLocation, setNewOrgLocation] = useState('');
   const [newKeyword, setNewKeyword] = useState('');
 
   useEffect(() => {
@@ -50,7 +52,8 @@ export function SettingsClient() {
         const criteria = data.apollo_search_criteria || data.prospect_discovery?.searchCriteria;
         if (criteria) {
           setPersonTitles(criteria.personTitles || []);
-          setLocations(criteria.personLocations || criteria.organizationLocations || []);
+          setPersonLocations(criteria.personLocations || []);
+          setOrganizationLocations(criteria.organizationLocations || []);
           setKeywords(criteria.q_organization_keyword_tags || []);
           setCompanySizes(criteria.organizationNumEmployeesRanges || []);
           setEmailStatus(criteria.contactEmailStatus?.[0] || 'verified');
@@ -91,7 +94,8 @@ export function SettingsClient() {
       // Save Apollo criteria as prospect_discovery setting
       const searchCriteria: any = {};
       if (personTitles.length > 0) searchCriteria.personTitles = personTitles;
-      if (locations.length > 0) searchCriteria.personLocations = locations;
+      if (personLocations.length > 0) searchCriteria.personLocations = personLocations;
+      if (organizationLocations.length > 0) searchCriteria.organizationLocations = organizationLocations;
       if (keywords.length > 0) searchCriteria.q_organization_keyword_tags = keywords;
       if (companySizes.length > 0) searchCriteria.organizationNumEmployeesRanges = companySizes;
       searchCriteria.contactEmailStatus = [emailStatus];
@@ -234,38 +238,73 @@ export function SettingsClient() {
             </p>
           </div>
 
-          {/* Locations */}
+          {/* Person Locations */}
           <div className="space-y-2">
-            <Label>Locations</Label>
+            <Label>Person Locations (Where People Live)</Label>
             <div className="flex gap-2">
               <Input
-                value={newLocation}
-                onChange={(e) => setNewLocation(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addItem(newLocation, setLocations, () => setNewLocation(''))}
-                placeholder="e.g. United Kingdom"
+                value={newPersonLocation}
+                onChange={(e) => setNewPersonLocation(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addItem(newPersonLocation, setPersonLocations, () => setNewPersonLocation(''))}
+                placeholder="e.g. United Kingdom, california, chicago"
               />
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
-                onClick={() => addItem(newLocation, setLocations, () => setNewLocation(''))}
+                onClick={() => addItem(newPersonLocation, setPersonLocations, () => setNewPersonLocation(''))}
               >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
             <div className="flex flex-wrap gap-2 mt-2">
-              {locations.map((location, i) => (
+              {personLocations.map((location, i) => (
                 <Badge key={i} variant="secondary" className="gap-1">
                   {location}
                   <X
                     className="h-3 w-3 cursor-pointer"
-                    onClick={() => removeItem(i, setLocations)}
+                    onClick={() => removeItem(i, setPersonLocations)}
                   />
                 </Badge>
               ))}
             </div>
             <p className="text-sm text-muted-foreground">
-              Geographic locations to search (e.g., United Kingdom, United States, London)
+              Where the person lives - cities, US states, or countries (e.g., United Kingdom, ireland, california)
+            </p>
+          </div>
+
+          {/* Organization Locations */}
+          <div className="space-y-2">
+            <Label>Organization Locations (Company HQ)</Label>
+            <div className="flex gap-2">
+              <Input
+                value={newOrgLocation}
+                onChange={(e) => setNewOrgLocation(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addItem(newOrgLocation, setOrganizationLocations, () => setNewOrgLocation(''))}
+                placeholder="e.g. United Kingdom, texas, tokyo"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => addItem(newOrgLocation, setOrganizationLocations, () => setNewOrgLocation(''))}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {organizationLocations.map((location, i) => (
+                <Badge key={i} variant="secondary" className="gap-1">
+                  {location}
+                  <X
+                    className="h-3 w-3 cursor-pointer"
+                    onClick={() => removeItem(i, setOrganizationLocations)}
+                  />
+                </Badge>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Where the company headquarters is located - cities, US states, or countries (e.g., United Kingdom, spain, texas)
             </p>
           </div>
 
