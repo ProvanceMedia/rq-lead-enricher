@@ -49,7 +49,7 @@ export async function POST(
       zip: enrichment.zip || undefined,
       country: enrichment.country || undefined,
       company_type: enrichment.companyType || undefined,
-      lifecyclestage: 'Enriched Prospect',
+      lifecyclestage: '1101494863', // Enriched Prospect ID in HubSpot
       outbound_cauldron_stage: '3. Address Procured',
       custom_p_s__line: enrichment.psLine || undefined,
     });
