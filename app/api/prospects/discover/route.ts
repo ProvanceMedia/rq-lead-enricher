@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     let searchCriteria: ApolloSearchCriteria = {
       personTitles: ['Marketing Director', 'Marketing Manager', 'CMO'],
       personLocations: ['United Kingdom'], // Where the person lives
+      organizationLocations: ['United Kingdom'], // Company HQ location
       contactEmailStatus: ['verified'],
     };
 

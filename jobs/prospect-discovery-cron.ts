@@ -39,6 +39,7 @@ async function getDiscoverySettings(): Promise<DiscoverySettings> {
       searchCriteria: {
         personTitles: ['Marketing Director', 'Marketing Manager', 'CMO'],
         personLocations: ['United Kingdom'], // Where the person lives
+        organizationLocations: ['United Kingdom'], // Company HQ location
         contactEmailStatus: ['verified'],
         perPage: 25,
       },
