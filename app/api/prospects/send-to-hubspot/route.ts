@@ -114,21 +114,9 @@ export async function POST(request: NextRequest) {
           (enrichmentResponse.person ? [enrichmentResponse.person] : undefined);
 
         if (matches && matches.length > 0) {
-          // Process match immediately using shared logic
-          const { processApolloMatches } = await import('@/lib/services/apollo-webhook-processor');
-          const result = await processApolloMatches(matches);
-
-          return NextResponse.json({
-            success: true,
-            prospectCount: 1,
-            processed: result.processed,
-            created: result.created,
-            failed: result.failed,
-            message:
-              result.created > 0
-                ? 'Apollo enrichment completed and HubSpot updated.'
-                : 'Apollo enrichment processed but HubSpot update may have failed. Check activity logs.',
-          });
+          console.log(
+            `Apollo single enrichment returned ${matches.length} immediate match(es); waiting for webhook for final revealed data.`
+          );
         }
 
         if (enrichmentResponse.id) {
@@ -149,7 +137,11 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        throw new Error('Apollo response did not include matches or bulk enrichment ID.');
+        return NextResponse.json({
+          success: true,
+          prospectCount: 1,
+          message: 'Apollo enrichment requested. Waiting for webhook callback with revealed data.',
+        });
       } catch (apolloError: any) {
         console.error('Apollo single enrichment error:', apolloError);
 
@@ -207,21 +199,9 @@ export async function POST(request: NextRequest) {
 
       // Check if we got synchronous results
       if (enrichmentResult.matches && enrichmentResult.matches.length > 0) {
-        console.log(`Got ${enrichmentResult.matches.length} matches synchronously, processing immediately...`);
-
-        // Process matches immediately using shared logic
-        const { processApolloMatches } = await import('@/lib/services/apollo-webhook-processor');
-        const result = await processApolloMatches(enrichmentResult.matches);
-
-        return NextResponse.json({
-          success: true,
-          enrichmentId: enrichmentResult.id,
-          prospectCount: selectedProspects.length,
-          processed: result.processed,
-          created: result.created,
-          failed: result.failed,
-          message: `Apollo enrichment completed! ${result.created} prospect(s) added to HubSpot.`,
-        });
+        console.log(
+          `Apollo bulk enrichment returned ${enrichmentResult.matches.length} synchronous match(es); waiting for webhook for final revealed data.`
+        );
       }
 
       // Async response - update status and wait for webhook

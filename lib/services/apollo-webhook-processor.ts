@@ -8,6 +8,8 @@ import { HubSpotService } from './hubspot';
  */
 export async function processApolloMatches(matches: any[]) {
   const hubspot = new HubSpotService();
+  const isPlaceholderEmail = (email?: string | null) =>
+    typeof email === 'string' && /not[_-]?unlocked/i.test(email.toLowerCase());
 
   let processed = 0;
   let created = 0;
@@ -24,6 +26,38 @@ export async function processApolloMatches(matches: any[]) {
 
       if (!prospect) {
         console.warn(`Prospect not found for Apollo ID: ${match.id}`);
+        continue;
+      }
+
+      const matchStatus = (match.status || '').toLowerCase();
+      if (matchStatus && matchStatus !== 'success') {
+        console.warn(
+          `Apollo enrichment returned non-success status for ${match.id}: ${match.status || 'unknown'}`
+        );
+
+        await db
+          .update(prospects)
+          .set({
+            apolloEnrichedData: match,
+            apolloEnrichedAt: new Date(),
+            enrichmentStatus: 'failed',
+            updatedAt: new Date(),
+          })
+          .where(eq(prospects.id, prospect.id));
+
+        await db.insert(enrichmentActivity).values({
+          prospectId: prospect.id,
+          action: 'apollo_enrichment_failed',
+          details: {
+            apolloId: match.id,
+            status: match.status || 'unknown',
+            error: match.error || match.error_message,
+          },
+          performedBy: 'apollo-webhook',
+        });
+
+        failed++;
+        processed++;
         continue;
       }
 
@@ -55,12 +89,13 @@ export async function processApolloMatches(matches: any[]) {
           })
           .filter((value: string | undefined): value is string => Boolean(value)) || [];
 
-      let enrichedEmail: string | null = personalEmails[0] || match.email || prospect.email || null;
-      const placeholderEmail = enrichedEmail?.startsWith('email_not_unlocked@');
-      if (placeholderEmail) {
-        // Keep existing prospect email if Apollo returns the locked placeholder
-        enrichedEmail = personalEmails[0] || prospect.email || null;
-      }
+      const candidateEmails = personalEmails.filter(email => !isPlaceholderEmail(email));
+
+      let enrichedEmail: string | null =
+        candidateEmails[0] ||
+        (isPlaceholderEmail(match.email) ? undefined : match.email) ||
+        (isPlaceholderEmail(prospect.email) ? undefined : prospect.email) ||
+        null;
 
       type ApolloPhone = {
         type?: string;
@@ -110,6 +145,36 @@ export async function processApolloMatches(matches: any[]) {
       const finalEmail = enrichedEmail ?? prospect.email ?? null;
 
       console.log(`Extracted data - Email: ${finalEmail}, Work Phone: ${workPhone}, Mobile: ${mobilePhone}`);
+
+      if (!finalEmail || isPlaceholderEmail(finalEmail)) {
+        console.warn(
+          `Apollo enrichment did not return an unlocked email for ${match.id}; marking prospect as failed.`
+        );
+
+        await db
+          .update(prospects)
+          .set({
+            apolloEnrichedData: match,
+            apolloEnrichedAt: new Date(),
+            enrichmentStatus: 'failed',
+            updatedAt: new Date(),
+          })
+          .where(eq(prospects.id, prospect.id));
+
+        await db.insert(enrichmentActivity).values({
+          prospectId: prospect.id,
+          action: 'apollo_enrichment_failed',
+          details: {
+            apolloId: match.id,
+            reason: 'email_not_unlocked',
+          },
+          performedBy: 'apollo-webhook',
+        });
+
+        failed++;
+        processed++;
+        continue;
+      }
 
       // Update prospect with enriched data
       await db
