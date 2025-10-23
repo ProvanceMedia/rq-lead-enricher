@@ -61,11 +61,11 @@ Execute in order - no status updates between steps:
 
 Analyze during address research. Apply decision tree:
 
-1. Sells products direct to consumers online → **Online Retailer**
-2. Core service is direct mail → **Direct Mail Agency**
-3. Buys/plans multi-channel paid media (TV/OOH/etc.) → **Ad Agency**
-4. Specializes in ecommerce brands/platforms → **eComm Agency**
-5. Default → **Marketing Agency**
+1. Sells products direct to consumers online → Online Retailer
+2. Core service is direct mail → Direct Mail Agency
+3. Buys/plans multi-channel paid media (TV/OOH/etc.) → Ad Agency
+4. Specializes in ecommerce brands/platforms → eComm Agency
+5. Default → Marketing Agency
 
 ### 4. P.S. Line Research
 
