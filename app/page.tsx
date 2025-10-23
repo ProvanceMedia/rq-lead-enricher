@@ -54,7 +54,7 @@ export default function HomePage() {
   const handleManualTrigger = async () => {
     setTriggering(true);
     try {
-      const res = await fetch('/api/trigger', {
+      const res = await fetch('/api/prospects/discover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ limit: parseInt(manualLimit) }),
@@ -64,17 +64,17 @@ export default function HomePage() {
 
       if (result.success) {
         alert(
-          `Successfully enriched ${result.enriched} of ${result.pulled} prospects.\n${
-            result.errors.length > 0 ? `\nErrors: ${result.errors.length}` : ''
-          }`
+          `Successfully discovered ${result.discovered} new prospects!\n` +
+          `Created: ${result.created}\n` +
+          `Duplicates skipped: ${result.duplicates}`
         );
         fetchStats();
       } else {
         alert(`Error: ${result.error}`);
       }
     } catch (error) {
-      console.error('Error triggering enrichment:', error);
-      alert('Failed to trigger enrichment');
+      console.error('Error triggering discovery:', error);
+      alert('Failed to trigger discovery');
     } finally {
       setTriggering(false);
     }
@@ -82,34 +82,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto py-4 px-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold">RQ Lead Enricher</h1>
-            <nav className="flex gap-4">
-              <Link href="/queue">
-                <Button variant="ghost">
-                  <ListTodo className="mr-2 h-4 w-4" />
-                  Queue
-                </Button>
-              </Link>
-              <Link href="/activity">
-                <Button variant="ghost">
-                  <Activity className="mr-2 h-4 w-4" />
-                  Activity
-                </Button>
-              </Link>
-              <Link href="/settings">
-                <Button variant="ghost">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </Button>
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
-
       <main className="container mx-auto py-8 px-4 space-y-8">
         <div>
           <h2 className="text-3xl font-bold">Dashboard</h2>
@@ -197,9 +169,9 @@ export default function HomePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Manual Enrichment Trigger</CardTitle>
+            <CardTitle>Manual Discovery Trigger</CardTitle>
             <CardDescription>
-              Manually trigger the enrichment process for a specified number of prospects
+              Manually discover new prospects from Apollo.io
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -217,11 +189,11 @@ export default function HomePage() {
               </div>
               <Button onClick={handleManualTrigger} disabled={triggering}>
                 <Play className="mr-2 h-4 w-4" />
-                {triggering ? 'Running...' : 'Trigger Enrichment'}
+                {triggering ? 'Running...' : 'Discover Prospects'}
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">
-              This will pull prospects from Apollo.io and enrich them immediately.
+              This will search Apollo.io for new prospects and add them to the queue for enrichment.
             </p>
           </CardContent>
         </Card>
