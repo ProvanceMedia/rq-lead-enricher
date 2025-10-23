@@ -62,11 +62,22 @@ export async function processApolloMatches(matches: any[]) {
         enrichedEmail = personalEmails[0] || prospect.email || null;
       }
 
-      const phoneNumbers = (match.phone_numbers || []).map((phone: any) => ({
-        type: phone.type || phone.type_cd,
-        status: phone.status || phone.status_cd,
-        sanitized: phone.sanitized_number || phone.sanitizedNumber,
-        raw: phone.raw_number || phone.rawNumber,
+      type ApolloPhone = {
+        type?: string;
+        type_cd?: string;
+        status?: string;
+        status_cd?: string;
+        sanitized_number?: string;
+        sanitizedNumber?: string;
+        raw_number?: string;
+        rawNumber?: string;
+      };
+
+      const phoneNumbers = (match.phone_numbers || []).map((phone: ApolloPhone) => ({
+        type: phone.type || phone.type_cd || '',
+        status: phone.status || phone.status_cd || '',
+        sanitized: phone.sanitized_number || phone.sanitizedNumber || '',
+        raw: phone.raw_number || phone.rawNumber || '',
       }));
 
       const isValid = (status?: string) => {
