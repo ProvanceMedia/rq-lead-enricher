@@ -230,18 +230,18 @@ export class ApolloService {
         JSON.stringify({ params, body: requestBody }, null, 2)
       );
 
-      // Build URL manually to ensure params are query parameters
-      const queryParams = new URLSearchParams();
-      Object.keys(params).forEach(key => {
-        if (params[key] !== undefined) {
-          queryParams.append(key, String(params[key]));
-        }
-      });
-      const fullUrl = `/people/bulk_match?${queryParams.toString()}`;
+      // Use axios params with custom serializer
+      console.log('Apollo params:', JSON.stringify(params, null, 2));
 
-      console.log('Full URL:', `${APOLLO_API_BASE}${fullUrl}`);
-
-      const response = await this.client.post(fullUrl, requestBody, {
+      const response = await this.client.post('/people/bulk_match', requestBody, {
+        params: params,
+        paramsSerializer: (params) => {
+          // Manually serialize to ensure booleans become "true" not "1"
+          return Object.keys(params)
+            .filter(key => params[key] !== undefined)
+            .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(String(params[key]))}`)
+            .join('&');
+        },
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
@@ -341,18 +341,18 @@ export class ApolloService {
         JSON.stringify({ params, body }, null, 2)
       );
 
-      // Build URL manually to ensure params are query parameters
-      const queryParams = new URLSearchParams();
-      Object.keys(params).forEach(key => {
-        if (params[key] !== undefined) {
-          queryParams.append(key, String(params[key]));
-        }
-      });
-      const fullUrl = `/people/match?${queryParams.toString()}`;
+      // Build query string manually and use axios params with paramsSerializer
+      console.log('Apollo params:', JSON.stringify(params, null, 2));
 
-      console.log('Full URL:', `${APOLLO_API_BASE}${fullUrl}`);
-
-      const response = await this.client.post(fullUrl, body, {
+      const response = await this.client.post('/people/match', body, {
+        params: params,
+        paramsSerializer: (params) => {
+          // Manually serialize to ensure booleans become "true" not "1"
+          return Object.keys(params)
+            .filter(key => params[key] !== undefined)
+            .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(String(params[key]))}`)
+            .join('&');
+        },
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
