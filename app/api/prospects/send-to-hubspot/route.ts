@@ -59,15 +59,92 @@ export async function POST(request: NextRequest) {
 
     const apollo = new ApolloService();
 
-    // Determine webhook URL
+    // If user selected only one prospect, use single enrichment via person_id
+    if (selectedProspects.length === 1) {
+      const [prospect] = selectedProspects;
+
+      if (!prospect.apolloId) {
+        return NextResponse.json(
+          { error: 'Prospect is missing Apollo ID and cannot be enriched.' },
+          { status: 400 }
+        );
+      }
+
+      try {
+        console.log(`Enriching single prospect via Apollo ID ${prospect.apolloId}`);
+
+        // Log activity for auditing
+        await db.insert(enrichmentActivity).values({
+          prospectId: prospect.id,
+          action: 'apollo_enrichment_started',
+          details: {
+            mode: 'single',
+            apolloId: prospect.apolloId,
+          },
+          performedBy: 'user',
+        });
+
+        const match = await apollo.enrichPerson({
+          person_id: prospect.apolloId,
+          first_name: prospect.firstName || undefined,
+          last_name: prospect.lastName || undefined,
+          email: prospect.email || undefined,
+          organization_name: prospect.companyName || undefined,
+          domain: prospect.companyDomain || undefined,
+        });
+
+        if (!match) {
+          throw new Error('Apollo did not return enrichment data for this contact.');
+        }
+
+        // Process match immediately using shared logic
+        const { processApolloMatches } = await import('@/lib/services/apollo-webhook-processor');
+        const result = await processApolloMatches([match]);
+
+        return NextResponse.json({
+          success: true,
+          prospectCount: 1,
+          processed: result.processed,
+          created: result.created,
+          failed: result.failed,
+          message:
+            result.created > 0
+              ? 'Apollo enrichment completed and HubSpot updated.'
+              : 'Apollo enrichment processed but HubSpot update may have failed. Check activity logs.',
+        });
+      } catch (apolloError: any) {
+        console.error('Apollo single enrichment error:', apolloError);
+
+        await db.insert(enrichmentActivity).values({
+          prospectId: prospect.id,
+          action: 'apollo_enrichment_failed',
+          details: {
+            mode: 'single',
+            error: apolloError.message,
+          },
+          performedBy: 'system',
+        });
+
+        return NextResponse.json(
+          {
+            error: 'Failed to enrich prospect via Apollo',
+            message: apolloError.message,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Otherwise fall back to bulk enrichment for multiple prospects
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://monkfish-app-8jphr.ondigitalocean.app';
     const webhookUrl = `${baseUrl}/api/webhooks/apollo-enrichment`;
 
     console.log(`Sending ${selectedProspects.length} prospects to Apollo for enrichment`);
     console.log(`Webhook URL: ${webhookUrl}`);
 
-    // Prepare people for Apollo enrichment
+    // Prepare people for Apollo bulk enrichment - pass Apollo ID when available
     const people = selectedProspects.map((p) => ({
+      id: p.apolloId || undefined,
       first_name: p.firstName || undefined,
       last_name: p.lastName || undefined,
       email: p.email || undefined,

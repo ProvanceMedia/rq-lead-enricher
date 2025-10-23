@@ -259,12 +259,13 @@ export class ApolloService {
    * @returns Enriched person data
    */
   async enrichPerson(person: {
+    person_id?: string;
     first_name?: string;
     last_name?: string;
     email?: string;
     organization_name?: string;
     domain?: string;
-  }): Promise<ApolloContact | null> {
+  }): Promise<any | null> {
     try {
       const response = await this.client.post(
         '/people/match',
