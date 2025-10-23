@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CheckCircle, XCircle, ExternalLink, RefreshCw, Loader2, Send, Sparkles } from 'lucide-react';
+import { CheckCircle, XCircle, ExternalLink, RefreshCw, Loader2, Send, Sparkles, FileText } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -28,6 +28,29 @@ interface Prospect {
   hubspotContactId: string | null;
 }
 
+interface ProspectLogs {
+  prospect: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    companyName: string | null;
+    enrichmentStatus: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  rawData: any;
+  apolloEnrichedData: any;
+  activity: Array<{
+    id: string;
+    enrichmentId: string | null;
+    action: string;
+    details: any;
+    performedBy: string | null;
+    createdAt: string;
+  }>;
+}
+
 type TabType = 'discovered' | 'in_hubspot' | 'awaiting' | 'approved';
 
 export function QueueClient() {
@@ -40,6 +63,15 @@ export function QueueClient() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
   const [enriching, setEnriching] = useState<Set<string>>(new Set());
+  const [logViewer, setLogViewer] = useState<{
+    prospectId: string | null;
+    loading: boolean;
+    error?: string | null;
+    data?: ProspectLogs | null;
+  }>({
+    prospectId: null,
+    loading: false,
+  });
 
   const fetchDiscoveredProspects = async () => {
     try {
@@ -107,6 +139,60 @@ export function QueueClient() {
   useEffect(() => {
     fetchData();
   }, [activeTab]);
+
+  const openLogs = useCallback(async (prospectId: string) => {
+    setLogViewer({ prospectId, loading: true });
+    try {
+      const res = await fetch(`/api/prospects/${prospectId}/logs`);
+      const payload = await res.json();
+
+      if (!res.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to load logs');
+      }
+
+      const { success, ...rest } = payload;
+
+      setLogViewer({
+        prospectId,
+        loading: false,
+        data: rest as ProspectLogs,
+        error: undefined,
+      });
+    } catch (error: any) {
+      const message = error.message || 'Failed to load logs';
+      setLogViewer({
+        prospectId,
+        loading: false,
+        error: message,
+      });
+      toast.error('Unable to load logs', { description: message });
+    }
+  }, []);
+
+  const closeLogs = useCallback(() => {
+    setLogViewer({
+      prospectId: null,
+      loading: false,
+      data: undefined,
+      error: undefined,
+    });
+  }, []);
+
+  const copyJson = useCallback(async (value: any, label: string) => {
+    try {
+      const json = JSON.stringify(value, null, 2);
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(json);
+        toast.success(`${label} copied to clipboard`);
+      } else {
+        throw new Error('Clipboard API not available');
+      }
+    } catch (error: any) {
+      toast.error(`Failed to copy ${label.toLowerCase()}`, {
+        description: error?.message || 'Clipboard not available',
+      });
+    }
+  }, []);
 
   const handleSendToHubSpot = async () => {
     if (selectedProspects.size === 0) {
@@ -399,6 +485,7 @@ export function QueueClient() {
                     <TableHead>Company</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Discovered</TableHead>
+                    <TableHead className="text-right">Logs</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -420,6 +507,16 @@ export function QueueClient() {
                       <TableCell>{prospect.title}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(prospect.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openLogs(prospect.id)}
+                        >
+                          <FileText className="mr-2 h-4 w-4" />
+                          Logs
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -499,17 +596,27 @@ export function QueueClient() {
                         {prospect.hubspotContactId}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          onClick={() => handleEnrichSingle(prospect.id)}
-                          disabled={enriching.has(prospect.id)}
-                        >
-                          {enriching.has(prospect.id) ? (
-                            <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Enriching...</>
-                          ) : (
-                            <><Sparkles className="mr-2 h-3 w-3" /> Enrich</>
-                          )}
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openLogs(prospect.id)}
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Logs
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleEnrichSingle(prospect.id)}
+                            disabled={enriching.has(prospect.id)}
+                          >
+                            {enriching.has(prospect.id) ? (
+                              <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Enriching...</>
+                            ) : (
+                              <><Sparkles className="mr-2 h-3 w-3" /> Enrich</>
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -541,6 +648,15 @@ export function QueueClient() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openLogs(prospect.id)}
+                      disabled={processing !== null}
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Logs
+                    </Button>
                     <Button
                       size="sm"
                       onClick={() => handleApprove(enrichment.id)}
@@ -646,6 +762,7 @@ export function QueueClient() {
                   <TableHead>Title</TableHead>
                   <TableHead>HubSpot ID</TableHead>
                   <TableHead>Approved</TableHead>
+                  <TableHead className="text-right">Logs</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -669,12 +786,119 @@ export function QueueClient() {
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(prospect.createdAt)}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openLogs(prospect.id)}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        Logs
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </Card>
         )
+      )}
+
+      {logViewer.prospectId && (
+        <Card>
+          <CardContent className="space-y-4 pt-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Prospect Logs</h3>
+                {logViewer.data && (
+                  <p className="text-sm text-muted-foreground">
+                    {logViewer.data.prospect.firstName} {logViewer.data.prospect.lastName} •{' '}
+                    {logViewer.data.prospect.email} • Status: {logViewer.data.prospect.enrichmentStatus}
+                  </p>
+                )}
+                {logViewer.error && (
+                  <p className="text-sm text-destructive">{logViewer.error}</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {logViewer.data?.rawData && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyJson(logViewer.data?.rawData, 'Discovery payload')}
+                  >
+                    Copy Discovery JSON
+                  </Button>
+                )}
+                {logViewer.data?.apolloEnrichedData && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyJson(logViewer.data?.apolloEnrichedData, 'Apollo enrichment payload')}
+                  >
+                    Copy Enrichment JSON
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={closeLogs}>
+                  Close
+                </Button>
+              </div>
+            </div>
+
+            {logViewer.loading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading logs...
+              </div>
+            ) : logViewer.error ? null : (
+              <>
+                <div className="space-y-2">
+                  <h4 className="font-semibold">Discovery Payload</h4>
+                  <pre className="max-h-80 overflow-auto rounded bg-muted p-4 text-xs">
+                    {JSON.stringify(logViewer.data?.rawData ?? {}, null, 2)}
+                  </pre>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="font-semibold">Apollo Enrichment Payload</h4>
+                  <pre className="max-h-80 overflow-auto rounded bg-muted p-4 text-xs">
+                    {JSON.stringify(logViewer.data?.apolloEnrichedData ?? {}, null, 2)}
+                  </pre>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="font-semibold">Activity Timeline</h4>
+                  {logViewer.data?.activity?.length ? (
+                    <ul className="space-y-2 text-sm">
+                      {logViewer.data.activity.map(entry => (
+                        <li key={entry.id} className="rounded border p-3">
+                          <div className="flex justify-between">
+                            <span className="font-medium">{entry.action}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDate(entry.createdAt)}
+                            </span>
+                          </div>
+                          {entry.performedBy && (
+                            <div className="text-xs text-muted-foreground">
+                              By {entry.performedBy}
+                            </div>
+                          )}
+                          {entry.details && (
+                            <pre className="mt-2 max-h-48 overflow-auto rounded bg-background p-2 text-xs">
+                              {JSON.stringify(entry.details, null, 2)}
+                            </pre>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No activity yet.</p>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );
