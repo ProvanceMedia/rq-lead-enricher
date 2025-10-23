@@ -4,8 +4,9 @@ const APOLLO_API_BASE = 'https://api.apollo.io/v1';
 
 export interface ApolloSearchCriteria {
   personTitles?: string[];
+  personLocations?: string[]; // Where the person lives (cities, states, countries)
   organizationNumEmployeesRanges?: string[];
-  organizationLocations?: string[];
+  organizationLocations?: string[]; // Where the company is headquartered
   organizationIndustryTagIds?: string[];
   q_organization_keyword_tags?: string[];
   contactEmailStatus?: string[];
@@ -82,6 +83,7 @@ export class ApolloService {
         page: criteria.page || 1,
         per_page: criteria.perPage || 25,
         person_titles: criteria.personTitles,
+        person_locations: criteria.personLocations,
         organization_num_employees_ranges: criteria.organizationNumEmployeesRanges,
         organization_locations: criteria.organizationLocations,
         organization_industry_tag_ids: criteria.organizationIndustryTagIds,
