@@ -30,7 +30,9 @@ export class HubSpotService {
   constructor(accessToken?: string) {
     const token = accessToken || process.env.HUBSPOT_ACCESS_TOKEN || '';
     if (!token) {
-      throw new Error('HubSpot access token is required');
+      throw new Error(
+        'HubSpot access token is required. Please set HUBSPOT_ACCESS_TOKEN environment variable in DigitalOcean App Platform: Settings > App-Level Environment Variables'
+      );
     }
     this.client = new Client({ accessToken: token });
   }

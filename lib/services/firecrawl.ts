@@ -23,7 +23,9 @@ export class FirecrawlService {
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.FIRECRAWL_API_KEY || '';
     if (!this.apiKey) {
-      throw new Error('Firecrawl API key is required');
+      throw new Error(
+        'Firecrawl API key is required. Please set FIRECRAWL_API_KEY environment variable in DigitalOcean App Platform: Settings > App-Level Environment Variables'
+      );
     }
   }
 

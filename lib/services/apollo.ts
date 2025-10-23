@@ -62,7 +62,9 @@ export class ApolloService {
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.APOLLO_API_KEY || '';
     if (!this.apiKey) {
-      throw new Error('Apollo API key is required');
+      throw new Error(
+        'Apollo API key is required. Please set APOLLO_API_KEY environment variable in DigitalOcean App Platform: Settings > App-Level Environment Variables'
+      );
     }
   }
 

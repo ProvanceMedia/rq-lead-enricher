@@ -23,7 +23,9 @@ export class ClaudeService {
   constructor(apiKey?: string) {
     const key = apiKey || process.env.ANTHROPIC_API_KEY || '';
     if (!key) {
-      throw new Error('Anthropic API key is required');
+      throw new Error(
+        'Anthropic API key is required. Please set ANTHROPIC_API_KEY environment variable in DigitalOcean App Platform: Settings > App-Level Environment Variables'
+      );
     }
     this.client = new Anthropic({ apiKey: key });
   }
