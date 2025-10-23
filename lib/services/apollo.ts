@@ -230,25 +230,29 @@ export class ApolloService {
         JSON.stringify({ params, body: requestBody }, null, 2)
       );
 
-      // Use axios params with custom serializer
-      console.log('Apollo params:', JSON.stringify(params, null, 2));
+      // FUCK AXIOS - Use fetch directly
+      const queryString = Object.keys(params)
+        .filter(key => params[key] !== undefined)
+        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(String(params[key]))}`)
+        .join('&');
 
-      const response = await this.client.post('/people/bulk_match', requestBody, {
-        params: params,
-        paramsSerializer: (params) => {
-          // Manually serialize to ensure booleans become "true" not "1"
-          return Object.keys(params)
-            .filter(key => params[key] !== undefined)
-            .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(String(params[key]))}`)
-            .join('&');
-        },
+      const url = `${APOLLO_API_BASE}/people/bulk_match?${queryString}`;
+
+      console.log('Apollo bulk enrichment URL:', url);
+
+      const response = await fetch(url, {
+        method: 'POST',
         headers: {
+          'X-Api-Key': this.apiKey,
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
         },
+        body: JSON.stringify(requestBody),
       });
 
-      console.log('Apollo bulk enrichment RESPONSE:', JSON.stringify(response.data, null, 2));
+      const data = await response.json();
+
+      console.log('Apollo bulk enrichment RESPONSE:', JSON.stringify(data, null, 2));
 
       // Apollo may return results immediately for small batches
       // Response format can be:
@@ -256,28 +260,28 @@ export class ApolloService {
       // or
       // { "id": "bulk_enrichment_id", "status": "processing" } - async with webhook
 
-      if (response.data.matches) {
+      if (data.matches) {
         // Synchronous response - return matches directly
         return {
           id: 'sync-' + Date.now(),
           status: 'completed',
-          matches: response.data.matches,
+          matches: data.matches,
         };
-      } else if (response.data.id) {
+      } else if (data.id) {
         // Async response - webhook will be called
         return {
-          id: response.data.id,
-          status: response.data.status || 'processing',
+          id: data.id,
+          status: data.status || 'processing',
         };
       } else {
-        console.warn('Unexpected Apollo response format:', response.data);
+        console.warn('Unexpected Apollo response format:', data);
         return {
           id: 'unknown-' + Date.now(),
           status: 'unknown',
         };
       }
     } catch (error: any) {
-      console.error('Apollo bulk enrichment error:', error.response?.data || error.message);
+      console.error('Apollo bulk enrichment error:', error.message);
       throw new Error(`Failed to start bulk enrichment: ${error.message}`);
     }
   }
@@ -341,29 +345,34 @@ export class ApolloService {
         JSON.stringify({ params, body }, null, 2)
       );
 
-      // Build query string manually and use axios params with paramsSerializer
-      console.log('Apollo params:', JSON.stringify(params, null, 2));
+      // FUCK AXIOS - Use fetch directly to ensure query params work
+      const queryString = Object.keys(params)
+        .filter(key => params[key] !== undefined)
+        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(String(params[key]))}`)
+        .join('&');
 
-      const response = await this.client.post('/people/match', body, {
-        params: params,
-        paramsSerializer: (params) => {
-          // Manually serialize to ensure booleans become "true" not "1"
-          return Object.keys(params)
-            .filter(key => params[key] !== undefined)
-            .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(String(params[key]))}`)
-            .join('&');
-        },
+      const url = `${APOLLO_API_BASE}/people/match?${queryString}`;
+
+      console.log('Apollo single enrichment URL:', url);
+      console.log('Apollo single enrichment BODY:', JSON.stringify(body, null, 2));
+
+      const response = await fetch(url, {
+        method: 'POST',
         headers: {
+          'X-Api-Key': this.apiKey,
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
         },
+        body: JSON.stringify(body),
       });
 
-      console.log('Apollo single enrichment RESPONSE:', JSON.stringify(response.data, null, 2));
+      const data = await response.json();
 
-      return response.data || null;
+      console.log('Apollo single enrichment RESPONSE:', JSON.stringify(data, null, 2));
+
+      return data || null;
     } catch (error: any) {
-      console.error('Apollo person enrichment error:', error.response?.data || error.message);
+      console.error('Apollo person enrichment error:', error.message);
       return null;
     }
   }
