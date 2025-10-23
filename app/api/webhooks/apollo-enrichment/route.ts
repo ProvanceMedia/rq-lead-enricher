@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     const payload = await request.json();
     console.log('Apollo enrichment webhook received:', JSON.stringify(payload, null, 2));
 
-    const matches = payload.matches || [];
+    const matches = payload.matches || payload.people || [];
 
     if (matches.length === 0) {
       return NextResponse.json({

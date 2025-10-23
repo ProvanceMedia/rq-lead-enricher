@@ -28,31 +28,78 @@ export async function processApolloMatches(matches: any[]) {
       }
 
       // Log the full match object to see what Apollo is returning
-      console.log(`Processing match for Apollo ID ${match.id}:`, JSON.stringify({
-        id: match.id,
-        email: match.email,
-        personal_emails: match.personal_emails,
-        phone_numbers: match.phone_numbers,
-        mobile_phone: match.mobile_phone,
-        employment_history: match.employment_history?.[0],
-      }, null, 2));
+      console.log(
+        `Processing match for Apollo ID ${match.id}:`,
+        JSON.stringify(
+          {
+            id: match.id,
+            email: match.email,
+            personal_emails: match.personal_emails,
+            phone_numbers: match.phone_numbers,
+            mobile_phone: match.mobile_phone,
+            employment_history: match.employment_history?.[0],
+          },
+          null,
+          2
+        )
+      );
 
       // Extract enriched data from Apollo response
       // Apollo puts revealed emails in personal_emails array, not in email field!
-      const enrichedEmail = match.personal_emails?.[0] || match.email || prospect.email;
-      const workPhone = match.phone_numbers?.find((p: any) =>
-        p.type === 'work' && p.status === 'valid'
-      )?.sanitized_number;
+      const personalEmails: string[] =
+        (match.personal_emails || [])
+          .map((value: any) => {
+            if (!value) return undefined;
+            if (typeof value === 'string') return value;
+            return value.email || value.value || value.address;
+          })
+          .filter((value: string | undefined): value is string => Boolean(value)) || [];
 
-      const mobilePhone = match.mobile_phone;
+      let enrichedEmail: string | null = personalEmails[0] || match.email || prospect.email || null;
+      const placeholderEmail = enrichedEmail?.startsWith('email_not_unlocked@');
+      if (placeholderEmail) {
+        // Keep existing prospect email if Apollo returns the locked placeholder
+        enrichedEmail = personalEmails[0] || prospect.email || null;
+      }
 
-      console.log(`Extracted data - Email: ${enrichedEmail}, Work Phone: ${workPhone}, Mobile: ${mobilePhone}`);
+      const phoneNumbers = (match.phone_numbers || []).map((phone: any) => ({
+        type: phone.type || phone.type_cd,
+        status: phone.status || phone.status_cd,
+        sanitized: phone.sanitized_number || phone.sanitizedNumber,
+        raw: phone.raw_number || phone.rawNumber,
+      }));
+
+      const isValid = (status?: string) => {
+        if (!status) return false;
+        return status === 'valid' || status === 'valid_number' || status === 'approved';
+      };
+
+      const workPhone =
+        phoneNumbers.find(
+          (phone) =>
+            isValid(phone.status) &&
+            phone.sanitized &&
+            ['work', 'direct', 'hq', 'office'].includes((phone.type || '').toLowerCase())
+        )?.sanitized ||
+        phoneNumbers.find((phone) => isValid(phone.status) && phone.sanitized)?.sanitized;
+
+      const mobilePhone =
+        phoneNumbers.find(
+          (phone) =>
+            isValid(phone.status) &&
+            phone.sanitized &&
+            ['mobile', 'cell'].includes((phone.type || '').toLowerCase())
+        )?.sanitized || match.mobile_phone;
+
+      const finalEmail = enrichedEmail ?? prospect.email ?? null;
+
+      console.log(`Extracted data - Email: ${finalEmail}, Work Phone: ${workPhone}, Mobile: ${mobilePhone}`);
 
       // Update prospect with enriched data
       await db
         .update(prospects)
         .set({
-          email: enrichedEmail, // Update with enriched email
+          email: finalEmail, // Update with enriched email if available
           phone: workPhone || null,
           mobilePhone: mobilePhone || null,
           apolloEnrichedData: match,
@@ -67,7 +114,7 @@ export async function processApolloMatches(matches: any[]) {
         prospectId: prospect.id,
         action: 'apollo_enriched',
         details: {
-          email: enrichedEmail,
+          email: finalEmail,
           phone: workPhone,
           mobilePhone: mobilePhone,
           apolloId: match.id,
@@ -78,7 +125,7 @@ export async function processApolloMatches(matches: any[]) {
       // Create HubSpot contact
       try {
         const hubspotContact = await hubspot.createOrUpdateContact({
-          email: enrichedEmail, // Use enriched email from Apollo
+          email: finalEmail || undefined, // Use enriched email from Apollo
           firstname: prospect.firstName || undefined,
           lastname: prospect.lastName || undefined,
           phone: workPhone || undefined,
@@ -104,7 +151,7 @@ export async function processApolloMatches(matches: any[]) {
           action: 'hubspot_created',
           details: {
             hubspotContactId: hubspotContact.id,
-            email: enrichedEmail,
+            email: finalEmail,
             phone: workPhone,
             mobilePhone: mobilePhone,
           },
@@ -113,7 +160,7 @@ export async function processApolloMatches(matches: any[]) {
 
         created++;
       } catch (hubspotError: any) {
-        console.error(`Failed to create HubSpot contact for ${enrichedEmail}:`, hubspotError.message);
+        console.error(`Failed to create HubSpot contact for ${finalEmail || prospect.email}:`, hubspotError.message);
 
         // Mark as failed
         await db
