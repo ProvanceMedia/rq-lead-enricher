@@ -230,8 +230,18 @@ export class ApolloService {
         JSON.stringify({ params, body: requestBody }, null, 2)
       );
 
-      const response = await this.client.post('/people/bulk_match', requestBody, {
-        params,
+      // Build URL manually to ensure params are query parameters
+      const queryParams = new URLSearchParams();
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined) {
+          queryParams.append(key, String(params[key]));
+        }
+      });
+      const fullUrl = `/people/bulk_match?${queryParams.toString()}`;
+
+      console.log('Full URL:', `${APOLLO_API_BASE}${fullUrl}`);
+
+      const response = await this.client.post(fullUrl, requestBody, {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
@@ -331,8 +341,18 @@ export class ApolloService {
         JSON.stringify({ params, body }, null, 2)
       );
 
-      const response = await this.client.post('/people/match', body, {
-        params,
+      // Build URL manually to ensure params are query parameters
+      const queryParams = new URLSearchParams();
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined) {
+          queryParams.append(key, String(params[key]));
+        }
+      });
+      const fullUrl = `/people/match?${queryParams.toString()}`;
+
+      console.log('Full URL:', `${APOLLO_API_BASE}${fullUrl}`);
+
+      const response = await this.client.post(fullUrl, body, {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
