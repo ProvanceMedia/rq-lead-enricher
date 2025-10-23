@@ -4,6 +4,8 @@ import { eq } from 'drizzle-orm';
 import { ApolloService, type ApolloSearchCriteria } from '@/lib/services/apollo';
 import { HubSpotService } from '@/lib/services/hubspot';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Manual trigger for prospect discovery
  * POST /api/prospects/discover

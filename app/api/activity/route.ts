@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db, enrichments, prospects } from '@/db';
 import { desc, or, eq } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const recentEnrichments = await db

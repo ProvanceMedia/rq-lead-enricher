@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db, enrichments, prospects } from '@/db';
 import { eq, count, and, gte } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     // Total prospects

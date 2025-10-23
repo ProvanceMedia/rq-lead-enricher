@@ -3,6 +3,8 @@ import { db, enrichments, enrichmentActivity, prospects } from '@/db';
 import { eq } from 'drizzle-orm';
 import { HubSpotService } from '@/lib/services/hubspot';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

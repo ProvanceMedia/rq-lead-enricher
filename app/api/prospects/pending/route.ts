@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db, prospects } from '@/db';
 import { eq } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Get prospects pending enrichment
  * GET /api/prospects/pending

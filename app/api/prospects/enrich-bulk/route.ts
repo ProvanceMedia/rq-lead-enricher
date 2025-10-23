@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EnrichmentAgentService } from '@/lib/services/enrichment-agent-service';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Enrich multiple prospects
  * POST /api/prospects/enrich-bulk
