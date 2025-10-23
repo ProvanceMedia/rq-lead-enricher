@@ -1,106 +1,126 @@
-import { relations } from "drizzle-orm";
-import {
-  boolean,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-  varchar
-} from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, jsonb, boolean, pgEnum } from 'drizzle-orm/pg-core';
+import { createId } from '@paralleldrive/cuid2';
 
-export const users = pgTable("users", {
-  id: text("id").primaryKey(), // Clerk user id
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  name: varchar("name", { length: 255 }),
-  role: varchar("role", { length: 32 }).notNull().default("operator"), // admin, operator, read_only
-  createdAt: timestamp("created_at").notNull().defaultNow()
+// Enums
+export const enrichmentStatusEnum = pgEnum('enrichment_status', [
+  'pending',
+  'in_progress',
+  'awaiting_approval',
+  'approved',
+  'rejected',
+  'failed'
+]);
+
+export const prospectEnrichmentStatusEnum = pgEnum('prospect_enrichment_status', [
+  'pending',
+  'enriching',
+  'enriched',
+  'failed'
+]);
+
+export const companyTypeEnum = pgEnum('company_type', [
+  'Online Retailer',
+  'Direct Mail Agency',
+  'Ad Agency',
+  'eComm Agency',
+  'Marketing Agency'
+]);
+
+// Prospects table - contacts pulled from Apollo
+export const prospects = pgTable('prospects', {
+  id: text('id').primaryKey().$defaultFn(() => createId()),
+  apolloId: text('apollo_id').unique(),
+  firstName: text('first_name'),
+  lastName: text('last_name'),
+  email: text('email'),
+  companyName: text('company_name'),
+  companyDomain: text('company_domain'),
+  linkedinUrl: text('linkedin_url'),
+  companyLinkedinUrl: text('company_linkedin_url'),
+  title: text('title'),
+  rawData: jsonb('raw_data'), // Store full Apollo response
+
+  // Enrichment tracking
+  enrichmentStatus: prospectEnrichmentStatusEnum('enrichment_status').default('pending'),
+  lastEnrichmentAttempt: timestamp('last_enrichment_attempt'),
+  enrichmentAttempts: integer('enrichment_attempts').default(0),
+
+  // HubSpot integration
+  hubspotContactId: text('hubspot_contact_id'),
+  hubspotCompanyId: text('hubspot_company_id'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export type User = typeof users.$inferSelect;
+// Enrichments table - enrichment results awaiting approval
+export const enrichments = pgTable('enrichments', {
+  id: text('id').primaryKey().$defaultFn(() => createId()),
+  prospectId: text('prospect_id').references(() => prospects.id).notNull(),
+  status: enrichmentStatusEnum('status').default('pending').notNull(),
 
-export const contacts = pgTable("contacts", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  firstName: varchar("first_name", { length: 120 }),
-  lastName: varchar("last_name", { length: 120 }),
-  company: varchar("company", { length: 255 }),
-  domain: varchar("domain", { length: 255 }),
-  apolloContactId: varchar("apollo_contact_id", { length: 255 }),
-  hubspotContactId: varchar("hubspot_contact_id", { length: 255 }),
-  createdAt: timestamp("created_at").notNull().defaultNow()
+  // Address fields
+  addressFound: boolean('address_found').default(false),
+  companyNameForAddress: text('company_name_for_address'), // Maps to 'address' field
+  streetAddressLine2: text('street_address_line_2'),
+  streetAddressLine3: text('street_address_line_3'),
+  city: text('city'),
+  zip: text('zip'),
+  country: text('country'),
+  addressSource: text('address_source'), // URL where address was found
+
+  // Company classification
+  companyType: companyTypeEnum('company_type'),
+  classificationReasoning: text('classification_reasoning'),
+
+  // P.S. Line
+  psLine: text('ps_line'),
+  psSource: text('ps_source'), // URL where P.S. info was found
+
+  // Metadata
+  enrichmentStartedAt: timestamp('enrichment_started_at'),
+  enrichmentCompletedAt: timestamp('enrichment_completed_at'),
+  approvedAt: timestamp('approved_at'),
+  approvedBy: text('approved_by'), // User ID or email
+  rejectedAt: timestamp('rejected_at'),
+  rejectedBy: text('rejected_by'),
+  rejectionReason: text('rejection_reason'),
+  errorMessage: text('error_message'),
+  retryCount: integer('retry_count').default(0),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export type Contact = typeof contacts.$inferSelect;
-
-export const enrichments = pgTable("enrichments", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  contactId: uuid("contact_id")
-    .notNull()
-    .references(() => contacts.id, { onDelete: "cascade" }),
-  status: varchar("status", { length: 32 }).notNull(), // awaiting_approval, approved, rejected, updated, error
-  addressLine1: varchar("address_line_1", { length: 255 }),
-  addressLine2: varchar("address_line_2", { length: 255 }),
-  city: varchar("city", { length: 120 }),
-  postcode: varchar("postcode", { length: 40 }),
-  country: varchar("country", { length: 120 }),
-  classification: varchar("classification", { length: 80 }),
-  psLine: varchar("ps_line", { length: 300 }),
-  psSourceUrl: varchar("ps_source_url", { length: 512 }),
-  addressSourceUrl: varchar("address_source_url", { length: 512 }),
-  approvalBlock: text("approval_block"),
-  error: text("error"),
-  decidedByUserId: varchar("decided_by_user_id", { length: 255 }), // Clerk user id
-  decidedAt: timestamp("decided_at"),
-  createdAt: timestamp("created_at").notNull().defaultNow()
+// Enrichment activity log - audit trail
+export const enrichmentActivity = pgTable('enrichment_activity', {
+  id: text('id').primaryKey().$defaultFn(() => createId()),
+  enrichmentId: text('enrichment_id').references(() => enrichments.id).notNull(),
+  prospectId: text('prospect_id').references(() => prospects.id).notNull(),
+  action: text('action').notNull(), // 'created', 'enrichment_started', 'enrichment_completed', 'approved', 'rejected', 'hubspot_updated', 'failed'
+  details: jsonb('details'), // Additional context
+  performedBy: text('performed_by'), // System or user identifier
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+// Settings table - configuration
+export const settings = pgTable('settings', {
+  id: text('id').primaryKey().$defaultFn(() => createId()),
+  key: text('key').unique().notNull(),
+  value: jsonb('value').notNull(),
+  description: text('description'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Type exports for TypeScript
+export type Prospect = typeof prospects.$inferSelect;
+export type NewProspect = typeof prospects.$inferInsert;
 
 export type Enrichment = typeof enrichments.$inferSelect;
+export type NewEnrichment = typeof enrichments.$inferInsert;
 
-export const events = pgTable("events", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  contactId: uuid("contact_id").references(() => contacts.id, {
-    onDelete: "set null"
-  }),
-  enrichmentId: uuid("enrichment_id").references(() => enrichments.id, {
-    onDelete: "set null"
-  }),
-  type: varchar("type", { length: 64 }).notNull(), // pulled_from_apollo, deduped, enriched, approval_requested, approved, rejected, hubspot_updated, failed
-  payload: text("payload"), // JSON stringified
-  createdAt: timestamp("created_at").notNull().defaultNow()
-});
-
-export type Event = typeof events.$inferSelect;
-
-export const settings = pgTable("settings", {
-  key: varchar("key", { length: 64 }).primaryKey(),
-  value: jsonb("value").notNull(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  secure: boolean("secure").notNull().default(false)
-});
+export type EnrichmentActivity = typeof enrichmentActivity.$inferSelect;
+export type NewEnrichmentActivity = typeof enrichmentActivity.$inferInsert;
 
 export type Setting = typeof settings.$inferSelect;
-
-export const contactsRelations = relations(contacts, ({ many }) => ({
-  enrichments: many(enrichments),
-  events: many(events)
-}));
-
-export const enrichmentsRelations = relations(enrichments, ({ one, many }) => ({
-  contact: one(contacts, {
-    fields: [enrichments.contactId],
-    references: [contacts.id]
-  }),
-  events: many(events)
-}));
-
-export const eventsRelations = relations(events, ({ one }) => ({
-  contact: one(contacts, {
-    fields: [events.contactId],
-    references: [contacts.id]
-  }),
-  enrichment: one(enrichments, {
-    fields: [events.enrichmentId],
-    references: [enrichments.id]
-  })
-}));
+export type NewSetting = typeof settings.$inferInsert;

@@ -1,115 +1,83 @@
-export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from 'next/server';
+import { db, enrichments, enrichmentActivity, prospects } from '@/db';
+import { eq } from 'drizzle-orm';
+import { HubSpotService } from '@/lib/services/hubspot';
 
-import { eq } from "drizzle-orm";
-import { db } from "@/db/client";
-import { contacts, enrichments } from "@/db/schema";
-import { withErrorHandling } from "@/lib/api-handler";
-import { requireUser } from "@/lib/auth";
-import { logEvent } from "@/lib/events";
-import { syncHubspotContact } from "@/lib/hubspot";
-import { HttpError, notFound } from "@/lib/errors";
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const enrichmentId = params.id;
 
-export const POST = withErrorHandling<{ params: Promise<{ id: string }> }>(
-  async ({ context }) => {
-    const { dbUser, clerkUser } = await requireUser(["admin", "operator"]);
-    const params = await context.params;
-    const id = params.id;
+    // Get enrichment with prospect
+    const [enrichmentRecord] = await db
+      .select({
+        enrichment: enrichments,
+        prospect: prospects,
+      })
+      .from(enrichments)
+      .leftJoin(prospects, eq(enrichments.prospectId, prospects.id))
+      .where(eq(enrichments.id, enrichmentId))
+      .limit(1);
 
-  if (!id) {
-    throw notFound("Enrichment not found");
-  }
-
-  const [record] = await db
-    .select({
-      enrichment: enrichments,
-      contact: contacts
-    })
-    .from(enrichments)
-    .innerJoin(contacts, eq(enrichments.contactId, contacts.id))
-    .where(eq(enrichments.id, id))
-    .limit(1);
-
-  if (!record) {
-    throw notFound("Enrichment not found");
-  }
-
-  if (record.enrichment.status !== "awaiting_approval") {
-    throw new HttpError("Enrichment is not awaiting approval", 409);
-  }
-
-  await logEvent({
-    contactId: record.contact.id,
-    enrichmentId: record.enrichment.id,
-    type: "approved",
-    payload: {
-      userId: dbUser.id,
-      userEmail: dbUser.email,
-      userName: clerkUser.fullName
+    if (!enrichmentRecord) {
+      return NextResponse.json(
+        { error: 'Enrichment not found' },
+        { status: 404 }
+      );
     }
-  });
 
-  const hubspotResult = await syncHubspotContact({
-    contact: record.contact,
-    enrichment: record.enrichment
-  });
+    const { enrichment, prospect } = enrichmentRecord;
 
-  const now = new Date();
-  const statusToSet =
-    hubspotResult.status === "failed"
-      ? "error"
-      : hubspotResult.status === "success"
-        ? "updated"
-        : "approved";
+    if (!prospect?.hubspotContactId) {
+      return NextResponse.json(
+        { error: 'HubSpot contact ID not found' },
+        { status: 400 }
+      );
+    }
 
-  await db.transaction(async (tx) => {
-    await tx
+    // Update HubSpot
+    const hubspot = new HubSpotService();
+    await hubspot.updateContact(prospect.hubspotContactId, {
+      address: enrichment.companyNameForAddress || undefined,
+      street_address_line_2: enrichment.streetAddressLine2 || undefined,
+      street_address_line_3: enrichment.streetAddressLine3 || undefined,
+      city: enrichment.city || undefined,
+      zip: enrichment.zip || undefined,
+      country: enrichment.country || undefined,
+      company_type: enrichment.companyType || undefined,
+      lifecyclestage: 'Enriched Prospect',
+      outbound_cauldron_stage: '3. Address Procured',
+      custom_p_s__line: enrichment.psLine || undefined,
+    });
+
+    // Update enrichment status
+    await db
       .update(enrichments)
       .set({
-        status: statusToSet,
-        decidedByUserId: dbUser.id,
-        decidedAt: now,
-        error: hubspotResult.status === "failed" ? hubspotResult.reason : null
+        status: 'approved',
+        approvedAt: new Date(),
+        approvedBy: 'user', // TODO: Add proper user authentication
+        updatedAt: new Date(),
       })
-      .where(eq(enrichments.id, record.enrichment.id));
+      .where(eq(enrichments.id, enrichmentId));
 
-    if (hubspotResult.status === "success") {
-      await tx
-        .update(contacts)
-        .set({ hubspotContactId: hubspotResult.id })
-        .where(eq(contacts.id, record.contact.id));
-    }
-  });
-
-  if (hubspotResult.status === "failed") {
-    await logEvent({
-      contactId: record.contact.id,
-      enrichmentId: record.enrichment.id,
-      type: "failed",
-      payload: {
-        target: "hubspot",
-        reason: hubspotResult.reason
-      }
+    // Log activity
+    await db.insert(enrichmentActivity).values({
+      enrichmentId,
+      prospectId: enrichment.prospectId,
+      action: 'approved',
+      details: { message: 'Enrichment approved and HubSpot updated' },
+      performedBy: 'user',
     });
-    return {
-      success: false,
-      status: hubspotResult.status,
-      message: hubspotResult.reason
-    };
-  }
 
-  await logEvent({
-    contactId: record.contact.id,
-    enrichmentId: record.enrichment.id,
-    type: "hubspot_updated",
-    payload: {
-      status: hubspotResult.status,
-      hubspotId: hubspotResult.status === "success" ? hubspotResult.id : undefined
-    }
-  });
-
-    return {
-      success: true,
-      status: hubspotResult.status
-    };
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error approving enrichment:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to approve enrichment' },
+      { status: 500 }
+    );
   }
-);
+}

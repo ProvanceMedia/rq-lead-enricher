@@ -1,41 +1,62 @@
-export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from 'next/server';
+import { db, settings } from '@/db';
+import { eq } from 'drizzle-orm';
 
-import { withErrorHandling } from "@/lib/api-handler";
-import { requireUser } from "@/lib/auth";
-import { HttpError } from "@/lib/errors";
-import { getSettingsMap, upsertSettings } from "@/lib/services/settings";
+export async function GET() {
+  try {
+    const allSettings = await db.select().from(settings);
 
-type PatchBody = {
-  updates: Array<{ key: string; value: unknown }>;
-};
+    const settingsMap: Record<string, any> = {};
+    allSettings.forEach((setting) => {
+      settingsMap[setting.key] = setting.value;
+    });
 
-export const GET = withErrorHandling(async () => {
-  await requireUser(["admin", "operator", "read_only"]);
-  const values = await getSettingsMap();
-
-  return {
-    data: values
-  };
-});
-
-export const PATCH = withErrorHandling(async ({ request }) => {
-  await requireUser(["admin"]);
-  const body = (await request.json().catch(() => ({}))) as PatchBody;
-
-  if (!Array.isArray(body.updates) || body.updates.length === 0) {
-    throw new HttpError("No updates provided", 400);
+    return NextResponse.json(settingsMap);
+  } catch (error: any) {
+    console.error('Error fetching settings:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch settings' },
+      { status: 500 }
+    );
   }
+}
 
-  await upsertSettings(
-    body.updates.map((update) => ({
-      key: update.key,
-      value: update.value
-    }))
-  );
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { key, value, description } = body;
 
-  const values = await getSettingsMap();
+    if (!key || !value) {
+      return NextResponse.json(
+        { error: 'Key and value are required' },
+        { status: 400 }
+      );
+    }
 
-  return {
-    data: values
-  };
-});
+    // Check if setting exists
+    const [existing] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, key))
+      .limit(1);
+
+    if (existing) {
+      // Update existing
+      await db
+        .update(settings)
+        .set({ value, description, updatedAt: new Date() })
+        .where(eq(settings.key, key));
+    } else {
+      // Create new
+      await db.insert(settings).values({ key, value, description });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error saving settings:', error);
+    return NextResponse.json(
+      { error: 'Failed to save settings' },
+      { status: 500 }
+    );
+  }
+}

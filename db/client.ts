@@ -1,29 +1,16 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
-import * as schema from "./schema";
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import * as schema from './schema';
 
-// Allow undefined during build time, will throw at runtime if actually used
-const connectionString = process.env.DATABASE_URL || "";
-
-// Configure SSL for production database connections
-const sslConfig = connectionString && process.env.NODE_ENV === "production"
-  ? {
-      rejectUnauthorized: false,
-      // Explicitly disable certificate verification for Digital Ocean managed databases
-      checkServerIdentity: () => undefined
-    }
-  : connectionString
-    ? { rejectUnauthorized: false }
-    : false;
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL environment variable is not set');
+}
 
 const pool = new Pool({
-  connectionString,
-  ssl: sslConfig,
-  connectionTimeoutMillis: 10000
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('sslmode=require')
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
 export const db = drizzle(pool, { schema });
-
-export const closeDbPool = async () => {
-  await pool.end();
-};

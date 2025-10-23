@@ -1,68 +1,57 @@
-export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from 'next/server';
+import { db, enrichments, enrichmentActivity } from '@/db';
+import { eq } from 'drizzle-orm';
 
-import { eq } from "drizzle-orm";
-import { db } from "@/db/client";
-import { enrichments } from "@/db/schema";
-import { withErrorHandling } from "@/lib/api-handler";
-import { requireUser } from "@/lib/auth";
-import { logEvent } from "@/lib/events";
-import { HttpError, notFound } from "@/lib/errors";
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const enrichmentId = params.id;
+    const body = await request.json();
+    const reason = body.reason || 'No reason provided';
 
-type RejectBody = {
-  reason?: string;
-};
+    // Get enrichment
+    const [enrichment] = await db
+      .select()
+      .from(enrichments)
+      .where(eq(enrichments.id, enrichmentId))
+      .limit(1);
 
-export const POST = withErrorHandling<{ params: Promise<{ id: string }> }>(
-  async ({ request, context }) => {
-    const { dbUser } = await requireUser(["admin", "operator"]);
-    const params = await context.params;
-    const id = params.id;
-
-  if (!id) {
-    throw notFound("Enrichment not found");
-  }
-
-  const body = (await request.json().catch(() => ({}))) as RejectBody;
-  const reason = body.reason?.slice(0, 500) ?? null;
-
-  const [record] = await db
-    .select()
-    .from(enrichments)
-    .where(eq(enrichments.id, id))
-    .limit(1);
-
-  if (!record) {
-    throw notFound("Enrichment not found");
-  }
-
-  if (record.status !== "awaiting_approval") {
-    throw new HttpError("Enrichment is not awaiting approval", 409);
-  }
-
-  const now = new Date();
-
-  await db
-    .update(enrichments)
-    .set({
-      status: "rejected",
-      error: reason,
-      decidedByUserId: dbUser.id,
-      decidedAt: now
-    })
-    .where(eq(enrichments.id, id));
-
-  await logEvent({
-    contactId: record.contactId,
-    enrichmentId: record.id,
-    type: "rejected",
-    payload: {
-      userId: dbUser.id,
-      reason
+    if (!enrichment) {
+      return NextResponse.json(
+        { error: 'Enrichment not found' },
+        { status: 404 }
+      );
     }
-  });
 
-    return {
-      success: true
-    };
+    // Update enrichment status
+    await db
+      .update(enrichments)
+      .set({
+        status: 'rejected',
+        rejectedAt: new Date(),
+        rejectedBy: 'user', // TODO: Add proper user authentication
+        rejectionReason: reason,
+        updatedAt: new Date(),
+      })
+      .where(eq(enrichments.id, enrichmentId));
+
+    // Log activity
+    await db.insert(enrichmentActivity).values({
+      enrichmentId,
+      prospectId: enrichment.prospectId,
+      action: 'rejected',
+      details: { reason },
+      performedBy: 'user',
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error rejecting enrichment:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to reject enrichment' },
+      { status: 500 }
+    );
   }
-);
+}
