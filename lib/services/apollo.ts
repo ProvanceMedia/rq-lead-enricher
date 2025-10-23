@@ -238,7 +238,7 @@ export class ApolloService {
 
       const url = `${APOLLO_API_BASE}/people/bulk_match?${queryString}`;
 
-      console.log('Apollo bulk enrichment URL:', url);
+      console.log('🚀 FETCH VERSION - Apollo bulk enrichment URL:', url);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -353,8 +353,8 @@ export class ApolloService {
 
       const url = `${APOLLO_API_BASE}/people/match?${queryString}`;
 
-      console.log('Apollo single enrichment URL:', url);
-      console.log('Apollo single enrichment BODY:', JSON.stringify(body, null, 2));
+      console.log('🚀 FETCH VERSION - Apollo single enrichment URL:', url);
+      console.log('🚀 FETCH VERSION - Apollo single enrichment BODY:', JSON.stringify(body, null, 2));
 
       const response = await fetch(url, {
         method: 'POST',
