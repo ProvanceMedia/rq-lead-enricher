@@ -73,7 +73,12 @@ export async function processApolloMatches(matches: any[]) {
         rawNumber?: string;
       };
 
-      const phoneNumbers = (match.phone_numbers || []).map((phone: ApolloPhone) => ({
+      const phoneNumbers: Array<{
+        type: string;
+        status: string;
+        sanitized: string;
+        raw: string;
+      }> = ((match.phone_numbers || []) as ApolloPhone[]).map((phone) => ({
         type: phone.type || phone.type_cd || '',
         status: phone.status || phone.status_cd || '',
         sanitized: phone.sanitized_number || phone.sanitizedNumber || '',
