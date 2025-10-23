@@ -61,6 +61,17 @@ export async function processApolloMatches(matches: any[]) {
         continue;
       }
 
+      const contactEmailsRaw = [
+        ...(Array.isArray(match.contact_emails) ? match.contact_emails : []),
+        ...(match.contact?.contact_emails ? match.contact.contact_emails : []),
+      ];
+
+      const extractEmailValue = (value: any): string | undefined => {
+        if (!value) return undefined;
+        if (typeof value === 'string') return value;
+        return value.email || value.value || value.address;
+      };
+
       // Log the full match object to see what Apollo is returning
       console.log(
         `Processing match for Apollo ID ${match.id}:`,
@@ -68,7 +79,9 @@ export async function processApolloMatches(matches: any[]) {
           {
             id: match.id,
             email: match.email,
+            contact_email: match.contact?.email,
             personal_emails: match.personal_emails,
+            contact_emails: contactEmailsRaw,
             phone_numbers: match.phone_numbers,
             mobile_phone: match.mobile_phone,
             employment_history: match.employment_history?.[0],
@@ -82,20 +95,28 @@ export async function processApolloMatches(matches: any[]) {
       // Apollo puts revealed emails in personal_emails array, not in email field!
       const personalEmails: string[] =
         (match.personal_emails || [])
-          .map((value: any) => {
-            if (!value) return undefined;
-            if (typeof value === 'string') return value;
-            return value.email || value.value || value.address;
-          })
+          .map(extractEmailValue)
           .filter((value: string | undefined): value is string => Boolean(value)) || [];
 
-      const candidateEmails = personalEmails.filter(email => !isPlaceholderEmail(email));
+      const contactEmails: string[] =
+        contactEmailsRaw
+          .map(extractEmailValue)
+          .filter((value: string | undefined): value is string => Boolean(value)) || [];
+
+      const possibleEmails = [
+        ...personalEmails,
+        ...contactEmails,
+        extractEmailValue(match.contact?.email),
+        match.email,
+        match.contact?.email,
+        match.person?.email,
+      ].filter((value: string | undefined | null): value is string => Boolean(value));
+
+      const candidateEmails = possibleEmails.filter(email => !isPlaceholderEmail(email));
 
       let enrichedEmail: string | null =
         candidateEmails[0] ||
-        (isPlaceholderEmail(match.email) ? undefined : match.email) ||
-        (isPlaceholderEmail(prospect.email) ? undefined : prospect.email) ||
-        null;
+        (prospect.email && !isPlaceholderEmail(prospect.email) ? prospect.email : null);
 
       type ApolloPhone = {
         type?: string;
