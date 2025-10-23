@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CheckCircle, XCircle, ExternalLink, RefreshCw, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, ExternalLink, RefreshCw, Loader2, Send, Sparkles } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -19,32 +19,48 @@ interface Prospect {
   firstName: string | null;
   lastName: string | null;
   email: string | null;
+  phone: string | null;
+  mobilePhone: string | null;
   companyName: string | null;
   title: string | null;
   createdAt: string;
   enrichmentStatus: string;
+  hubspotContactId: string | null;
 }
 
-type TabType = 'pending' | 'awaiting' | 'completed';
+type TabType = 'discovered' | 'in_hubspot' | 'awaiting';
 
 export function QueueClient() {
-  const [activeTab, setActiveTab] = useState<TabType>('pending');
+  const [activeTab, setActiveTab] = useState<TabType>('discovered');
   const [enrichments, setEnrichments] = useState<EnrichmentWithProspect[]>([]);
-  const [pendingProspects, setPendingProspects] = useState<Prospect[]>([]);
+  const [discoveredProspects, setDiscoveredProspects] = useState<Prospect[]>([]);
+  const [hubspotProspects, setHubspotProspects] = useState<Prospect[]>([]);
   const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
   const [enriching, setEnriching] = useState<Set<string>>(new Set());
 
-  const fetchPendingProspects = async () => {
+  const fetchDiscoveredProspects = async () => {
     try {
-      const res = await fetch('/api/prospects/pending');
+      const res = await fetch('/api/prospects/pending?status=discovered');
       const data = await res.json();
       if (data.success) {
-        setPendingProspects(data.prospects);
+        setDiscoveredProspects(data.prospects);
       }
     } catch (error) {
-      console.error('Error fetching pending prospects:', error);
+      console.error('Error fetching discovered prospects:', error);
+    }
+  };
+
+  const fetchHubSpotProspects = async () => {
+    try {
+      const res = await fetch('/api/prospects/pending?status=in_hubspot');
+      const data = await res.json();
+      if (data.success) {
+        setHubspotProspects(data.prospects);
+      }
+    } catch (error) {
+      console.error('Error fetching HubSpot prospects:', error);
     }
   };
 
@@ -61,8 +77,10 @@ export function QueueClient() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (activeTab === 'pending') {
-        await fetchPendingProspects();
+      if (activeTab === 'discovered') {
+        await fetchDiscoveredProspects();
+      } else if (activeTab === 'in_hubspot') {
+        await fetchHubSpotProspects();
       } else if (activeTab === 'awaiting') {
         await fetchEnrichments();
       }
@@ -74,6 +92,116 @@ export function QueueClient() {
   useEffect(() => {
     fetchData();
   }, [activeTab]);
+
+  const handleSendToHubSpot = async () => {
+    if (selectedProspects.size === 0) {
+      toast.warning('No prospects selected', {
+        description: 'Please select at least one prospect to send to HubSpot',
+      });
+      return;
+    }
+
+    setProcessing('bulk');
+    try {
+      const res = await fetch('/api/prospects/send-to-hubspot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prospectIds: Array.from(selectedProspects) }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        toast.success('Sent to HubSpot!', {
+          description: data.message,
+        });
+        setSelectedProspects(new Set());
+        await fetchDiscoveredProspects();
+      } else {
+        toast.error('Failed to send to HubSpot', {
+          description: data.error || data.message,
+        });
+      }
+    } catch (error) {
+      console.error('Error sending to HubSpot:', error);
+      toast.error('Failed to send to HubSpot', {
+        description: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleEnrichSingle = async (prospectId: string) => {
+    setEnriching(prev => new Set(prev).add(prospectId));
+    try {
+      const res = await fetch('/api/prospects/enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prospectId }),
+      });
+
+      if (res.ok) {
+        toast.success('Enrichment started successfully');
+        await fetchHubSpotProspects();
+      } else {
+        const error = await res.json();
+        toast.error('Failed to start enrichment', {
+          description: error.error,
+        });
+      }
+    } catch (error) {
+      console.error('Error enriching prospect:', error);
+      toast.error('Failed to enrich prospect', {
+        description: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setEnriching(prev => {
+        const next = new Set(prev);
+        next.delete(prospectId);
+        return next;
+      });
+    }
+  };
+
+  const handleEnrichBulk = async () => {
+    if (selectedProspects.size === 0) {
+      toast.warning('No prospects selected', {
+        description: 'Please select at least one prospect to enrich',
+      });
+      return;
+    }
+
+    setProcessing('bulk');
+    try {
+      const res = await fetch('/api/prospects/enrich-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prospectIds: Array.from(selectedProspects) }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.success('Bulk enrichment completed!', {
+          description: `Succeeded: ${data.succeeded}, Failed: ${data.failed}`,
+        });
+        setSelectedProspects(new Set());
+        await fetchHubSpotProspects();
+      } else {
+        const error = await res.json();
+        toast.error('Bulk enrichment failed', {
+          description: error.error,
+        });
+      }
+    } catch (error) {
+      console.error('Error bulk enriching:', error);
+      toast.error('Failed to bulk enrich prospects', {
+        description: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setProcessing(null);
+    }
+  };
 
   const handleApprove = async (enrichmentId: string) => {
     setProcessing(enrichmentId);
@@ -131,77 +259,6 @@ export function QueueClient() {
     }
   };
 
-  const handleEnrichSingle = async (prospectId: string) => {
-    setEnriching(prev => new Set(prev).add(prospectId));
-    try {
-      const res = await fetch('/api/prospects/enrich', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prospectId }),
-      });
-
-      if (res.ok) {
-        await fetchPendingProspects();
-        toast.success('Enrichment started successfully');
-      } else {
-        const error = await res.json();
-        toast.error('Failed to start enrichment', {
-          description: error.error,
-        });
-      }
-    } catch (error) {
-      console.error('Error enriching prospect:', error);
-      toast.error('Failed to enrich prospect', {
-        description: 'An unexpected error occurred. Please try again.',
-      });
-    } finally {
-      setEnriching(prev => {
-        const next = new Set(prev);
-        next.delete(prospectId);
-        return next;
-      });
-    }
-  };
-
-  const handleEnrichBulk = async () => {
-    if (selectedProspects.size === 0) {
-      toast.warning('No prospects selected', {
-        description: 'Please select at least one prospect to enrich',
-      });
-      return;
-    }
-
-    setProcessing('bulk');
-    try {
-      const res = await fetch('/api/prospects/enrich-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prospectIds: Array.from(selectedProspects) }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        toast.success('Bulk enrichment completed!', {
-          description: `Succeeded: ${data.succeeded}, Failed: ${data.failed}`,
-        });
-        setSelectedProspects(new Set());
-        await fetchPendingProspects();
-      } else {
-        const error = await res.json();
-        toast.error('Bulk enrichment failed', {
-          description: error.error,
-        });
-      }
-    } catch (error) {
-      console.error('Error bulk enriching:', error);
-      toast.error('Failed to bulk enrich prospects', {
-        description: 'An unexpected error occurred. Please try again.',
-      });
-    } finally {
-      setProcessing(null);
-    }
-  };
-
   const toggleProspectSelection = (prospectId: string) => {
     setSelectedProspects(prev => {
       const next = new Set(prev);
@@ -214,11 +271,11 @@ export function QueueClient() {
     });
   };
 
-  const selectAll = () => {
-    if (selectedProspects.size === pendingProspects.length) {
+  const selectAll = (prospects: Prospect[]) => {
+    if (selectedProspects.size === prospects.length) {
       setSelectedProspects(new Set());
     } else {
-      setSelectedProspects(new Set(pendingProspects.map(p => p.id)));
+      setSelectedProspects(new Set(prospects.map(p => p.id)));
     }
   };
 
@@ -238,14 +295,24 @@ export function QueueClient() {
       {/* Tabs */}
       <div className="flex gap-2 border-b">
         <button
-          onClick={() => setActiveTab('pending')}
+          onClick={() => setActiveTab('discovered')}
           className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-            activeTab === 'pending'
+            activeTab === 'discovered'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-gray-600 hover:text-gray-900'
           }`}
         >
-          Pending Enrichment ({pendingProspects.length})
+          Discovered ({discoveredProspects.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('in_hubspot')}
+          className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+            activeTab === 'in_hubspot'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          In HubSpot ({hubspotProspects.length})
         </button>
         <button
           onClick={() => setActiveTab('awaiting')}
@@ -265,16 +332,16 @@ export function QueueClient() {
             <p className="text-center text-muted-foreground">Loading...</p>
           </CardContent>
         </Card>
-      ) : activeTab === 'pending' ? (
-        /* Pending Enrichment Tab */
+      ) : activeTab === 'discovered' ? (
+        /* Discovered Tab */
         <>
           {selectedProspects.size > 0 && (
             <div className="flex gap-2">
-              <Button onClick={handleEnrichBulk} disabled={processing === 'bulk'}>
+              <Button onClick={handleSendToHubSpot} disabled={processing === 'bulk'}>
                 {processing === 'bulk' ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enriching...</>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</>
                 ) : (
-                  `Enrich Selected (${selectedProspects.size})`
+                  <><Send className="mr-2 h-4 w-4" /> Send to HubSpot ({selectedProspects.size})</>
                 )}
               </Button>
               <Button variant="outline" onClick={() => setSelectedProspects(new Set())}>
@@ -283,10 +350,10 @@ export function QueueClient() {
             </div>
           )}
 
-          {pendingProspects.length === 0 ? (
+          {discoveredProspects.length === 0 ? (
             <Card>
               <CardContent className="p-8">
-                <p className="text-center text-muted-foreground">No prospects pending enrichment</p>
+                <p className="text-center text-muted-foreground">No discovered prospects</p>
               </CardContent>
             </Card>
           ) : (
@@ -297,8 +364,8 @@ export function QueueClient() {
                     <TableHead className="w-12">
                       <input
                         type="checkbox"
-                        checked={selectedProspects.size === pendingProspects.length && pendingProspects.length > 0}
-                        onChange={selectAll}
+                        checked={selectedProspects.size === discoveredProspects.length && discoveredProspects.length > 0}
+                        onChange={() => selectAll(discoveredProspects)}
                         className="rounded"
                       />
                     </TableHead>
@@ -306,12 +373,11 @@ export function QueueClient() {
                     <TableHead>Email</TableHead>
                     <TableHead>Company</TableHead>
                     <TableHead>Title</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Discovered</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pendingProspects.map((prospect) => (
+                  {discoveredProspects.map((prospect) => (
                     <TableRow key={prospect.id}>
                       <TableCell>
                         <input
@@ -330,6 +396,83 @@ export function QueueClient() {
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(prospect.createdAt)}
                       </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </>
+      ) : activeTab === 'in_hubspot' ? (
+        /* In HubSpot Tab */
+        <>
+          {selectedProspects.size > 0 && (
+            <div className="flex gap-2">
+              <Button onClick={handleEnrichBulk} disabled={processing === 'bulk'}>
+                {processing === 'bulk' ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enriching...</>
+                ) : (
+                  <><Sparkles className="mr-2 h-4 w-4" /> Enrich Selected ({selectedProspects.size})</>
+                )}
+              </Button>
+              <Button variant="outline" onClick={() => setSelectedProspects(new Set())}>
+                Clear Selection
+              </Button>
+            </div>
+          )}
+
+          {hubspotProspects.length === 0 ? (
+            <Card>
+              <CardContent className="p-8">
+                <p className="text-center text-muted-foreground">No prospects in HubSpot ready for enrichment</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedProspects.size === hubspotProspects.length && hubspotProspects.length > 0}
+                        onChange={() => selectAll(hubspotProspects)}
+                        className="rounded"
+                      />
+                    </TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>HubSpot ID</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {hubspotProspects.map((prospect) => (
+                    <TableRow key={prospect.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedProspects.has(prospect.id)}
+                          onChange={() => toggleProspectSelection(prospect.id)}
+                          className="rounded"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {prospect.firstName} {prospect.lastName}
+                      </TableCell>
+                      <TableCell>{prospect.email}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {prospect.phone && <div>{prospect.phone}</div>}
+                          {prospect.mobilePhone && <div className="text-muted-foreground">{prospect.mobilePhone}</div>}
+                        </div>
+                      </TableCell>
+                      <TableCell>{prospect.companyName}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {prospect.hubspotContactId?.substring(0, 12)}...
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
@@ -339,7 +482,7 @@ export function QueueClient() {
                           {enriching.has(prospect.id) ? (
                             <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Enriching...</>
                           ) : (
-                            'Enrich'
+                            <><Sparkles className="mr-2 h-3 w-3" /> Enrich</>
                           )}
                         </Button>
                       </TableCell>
@@ -362,15 +505,15 @@ export function QueueClient() {
         <div className="space-y-4">
           {enrichments.map(({ enrichment, prospect }) => (
             <Card key={enrichment.id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
+              <CardContent className="pt-6">
+                <div className="flex justify-between items-start mb-4">
                   <div>
-                    <CardTitle>
+                    <h3 className="text-lg font-semibold">
                       {prospect.firstName} {prospect.lastName}
-                    </CardTitle>
-                    <CardDescription>
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
                       {prospect.email} • {prospect.companyName}
-                    </CardDescription>
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -393,11 +536,10 @@ export function QueueClient() {
                     </Button>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent>
+
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <h3 className="font-semibold mb-2">Address</h3>
+                    <h4 className="font-semibold mb-2">Address</h4>
                     {enrichment.addressFound ? (
                       <div className="space-y-1 text-sm">
                         <p>{enrichment.companyNameForAddress}</p>
@@ -424,7 +566,7 @@ export function QueueClient() {
                   </div>
 
                   <div>
-                    <h3 className="font-semibold mb-2">Company Type</h3>
+                    <h4 className="font-semibold mb-2">Company Type</h4>
                     <Badge variant="secondary" className="mb-2">
                       {enrichment.companyType}
                     </Badge>
@@ -437,7 +579,7 @@ export function QueueClient() {
                 </div>
 
                 <div className="mt-4">
-                  <h3 className="font-semibold mb-2">P.S. Line</h3>
+                  <h4 className="font-semibold mb-2">P.S. Line</h4>
                   <p className="text-sm italic">{enrichment.psLine}</p>
                   {enrichment.psSource && enrichment.psSource !== 'default' && (
                     <a

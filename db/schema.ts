@@ -12,9 +12,11 @@ export const enrichmentStatusEnum = pgEnum('enrichment_status', [
 ]);
 
 export const prospectEnrichmentStatusEnum = pgEnum('prospect_enrichment_status', [
-  'pending',
-  'enriching',
-  'enriched',
+  'discovered',           // New from Apollo, awaiting approval to send to HubSpot
+  'apollo_enriching',     // Apollo enrichment in progress
+  'in_hubspot',          // Created in HubSpot, ready for address enrichment
+  'enriching',           // Claude enrichment in progress
+  'enriched',            // Fully enriched
   'failed'
 ]);
 
@@ -33,6 +35,8 @@ export const prospects = pgTable('prospects', {
   firstName: text('first_name'),
   lastName: text('last_name'),
   email: text('email'),
+  phone: text('phone'), // Phone from Apollo enrichment
+  mobilePhone: text('mobile_phone'), // Mobile phone from Apollo enrichment
   companyName: text('company_name'),
   companyDomain: text('company_domain'),
   linkedinUrl: text('linkedin_url'),
@@ -40,8 +44,13 @@ export const prospects = pgTable('prospects', {
   title: text('title'),
   rawData: jsonb('raw_data'), // Store full Apollo response
 
+  // Apollo enrichment tracking
+  apolloEnrichmentId: text('apollo_enrichment_id'), // Apollo bulk enrichment ID
+  apolloEnrichedAt: timestamp('apollo_enriched_at'),
+  apolloEnrichedData: jsonb('apollo_enriched_data'), // Full Apollo enrichment response
+
   // Enrichment tracking
-  enrichmentStatus: prospectEnrichmentStatusEnum('enrichment_status').default('pending'),
+  enrichmentStatus: prospectEnrichmentStatusEnum('enrichment_status').default('discovered'),
   lastEnrichmentAttempt: timestamp('last_enrichment_attempt'),
   enrichmentAttempts: integer('enrichment_attempts').default(0),
 

@@ -122,7 +122,7 @@ async function runDiscoveryJob() {
             companyLinkedinUrl: contact.organization?.linkedin_url,
             title: contact.title,
             rawData: contact as any,
-            enrichmentStatus: 'pending',
+            enrichmentStatus: 'discovered',
           })
           .returning();
 

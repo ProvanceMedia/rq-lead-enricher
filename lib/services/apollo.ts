@@ -166,4 +166,92 @@ export class ApolloService {
       return null;
     }
   }
+
+  /**
+   * Bulk enrich people with phone numbers and emails
+   * Apollo will process asynchronously and send results to webhook
+   *
+   * @param people - Array of people to enrich
+   * @param webhookUrl - URL where Apollo will send enriched data
+   * @returns Bulk enrichment ID for tracking
+   */
+  async bulkEnrichPeople(
+    people: Array<{
+      first_name?: string;
+      last_name?: string;
+      email?: string;
+      organization_name?: string;
+      domain?: string;
+    }>,
+    webhookUrl: string
+  ): Promise<{ id: string; status: string } | null> {
+    try {
+      const response = await this.client.post(
+        '/people/bulk_match',
+        {
+          details: people,
+          webhook_url: webhookUrl,
+          reveal_personal_emails: true,
+          reveal_phone_number: true,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+          },
+        }
+      );
+
+      // Response format:
+      // {
+      //   "id": "bulk_enrichment_id",
+      //   "status": "processing"
+      // }
+
+      return {
+        id: response.data.id,
+        status: response.data.status || 'processing',
+      };
+    } catch (error: any) {
+      console.error('Apollo bulk enrichment error:', error.response?.data || error.message);
+      throw new Error(`Failed to start bulk enrichment: ${error.message}`);
+    }
+  }
+
+  /**
+   * Enrich a single person with phone numbers and emails
+   * This is synchronous and returns immediately
+   *
+   * @param person - Person to enrich
+   * @returns Enriched person data
+   */
+  async enrichPerson(person: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    organization_name?: string;
+    domain?: string;
+  }): Promise<ApolloContact | null> {
+    try {
+      const response = await this.client.post(
+        '/people/match',
+        {
+          ...person,
+          reveal_personal_emails: true,
+          reveal_phone_number: true,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+          },
+        }
+      );
+
+      return response.data.person || null;
+    } catch (error: any) {
+      console.error('Apollo person enrichment error:', error.response?.data || error.message);
+      return null;
+    }
+  }
 }

@@ -98,6 +98,44 @@ export class HubSpotService {
     }
   }
 
+  async createOrUpdateContact(properties: Record<string, string | undefined>): Promise<HubSpotContact> {
+    try {
+      // Filter out undefined values
+      const cleanProperties: Record<string, string> = {};
+      Object.keys(properties).forEach(key => {
+        if (properties[key] !== undefined) {
+          cleanProperties[key] = properties[key]!;
+        }
+      });
+
+      // Try to create the contact
+      try {
+        const response = await this.client.crm.contacts.basicApi.create({
+          properties: cleanProperties,
+          associations: [],
+        });
+
+        return response as HubSpotContact;
+      } catch (createError: any) {
+        // If contact already exists (CONFLICT), search and update
+        if (createError.body?.category === 'CONFLICT' && properties.email) {
+          const existingContact = await this.searchContactByEmail(properties.email);
+          if (existingContact) {
+            // Update existing contact
+            await this.client.crm.contacts.basicApi.update(existingContact.id, {
+              properties: cleanProperties,
+            });
+            return existingContact;
+          }
+        }
+        throw createError;
+      }
+    } catch (error: any) {
+      console.error('HubSpot create or update contact error:', error.message);
+      throw new Error(`Failed to create or update HubSpot contact: ${error.message}`);
+    }
+  }
+
   async updateContact(
     contactId: string,
     updates: HubSpotContactUpdate

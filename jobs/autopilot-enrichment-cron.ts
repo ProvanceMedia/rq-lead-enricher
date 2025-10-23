@@ -68,7 +68,7 @@ async function runAutopilotEnrichment() {
     const pendingProspects = await db
       .select()
       .from(prospects)
-      .where(eq(prospects.enrichmentStatus, 'pending'))
+      .where(eq(prospects.enrichmentStatus, 'in_hubspot'))
       .limit(autopilotSettings.maxPerRun);
 
     if (pendingProspects.length === 0) {

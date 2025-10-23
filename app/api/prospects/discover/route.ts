@@ -95,43 +95,22 @@ export async function POST(request: NextRequest) {
             companyLinkedinUrl: contact.organization?.linkedin_url,
             title: contact.title,
             rawData: contact as any,
-            enrichmentStatus: 'pending',
+            enrichmentStatus: 'discovered',
           })
           .returning();
 
         createdCount++;
 
-        // Create in HubSpot
-        try {
-          const hubspotContactId = await hubspotService.createContact(
-            prospect.email!,
-            prospect.firstName || undefined,
-            prospect.lastName || undefined,
-            prospect.companyName || undefined
-          );
-
-          await db
-            .update(prospects)
-            .set({
-              hubspotContactId,
-              updatedAt: new Date(),
-            })
-            .where(eq(prospects.id, prospect.id));
-
-          // Log activity
-          await db.insert(enrichmentActivity).values({
-            prospectId: prospect.id,
-            action: 'prospect_created',
-            details: {
-              source: 'manual_discovery',
-              apolloId: contact.id,
-              hubspotContactId,
-            },
-            performedBy: 'user',
-          } as any);
-        } catch (hubspotError: any) {
-          console.error(`Failed to create in HubSpot: ${hubspotError.message}`);
-        }
+        // Log activity
+        await db.insert(enrichmentActivity).values({
+          prospectId: prospect.id,
+          action: 'prospect_discovered',
+          details: {
+            source: 'manual_discovery',
+            apolloId: contact.id,
+          },
+          performedBy: 'user',
+        } as any);
 
         // Rate limit
         await new Promise(resolve => setTimeout(resolve, 500));
