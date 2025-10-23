@@ -27,7 +27,8 @@ export async function processApolloMatches(matches: any[]) {
         continue;
       }
 
-      // Extract phone numbers from Apollo response
+      // Extract enriched data from Apollo response
+      const enrichedEmail = match.email || prospect.email; // Use enriched email or fall back to original
       const workPhone = match.phone_numbers?.find((p: any) =>
         p.type === 'work' && p.status === 'valid'
       )?.sanitized_number;
@@ -38,6 +39,7 @@ export async function processApolloMatches(matches: any[]) {
       await db
         .update(prospects)
         .set({
+          email: enrichedEmail, // Update with enriched email
           phone: workPhone || null,
           mobilePhone: mobilePhone || null,
           apolloEnrichedData: match,
@@ -52,6 +54,7 @@ export async function processApolloMatches(matches: any[]) {
         prospectId: prospect.id,
         action: 'apollo_enriched',
         details: {
+          email: enrichedEmail,
           phone: workPhone,
           mobilePhone: mobilePhone,
           apolloId: match.id,
@@ -62,7 +65,7 @@ export async function processApolloMatches(matches: any[]) {
       // Create HubSpot contact
       try {
         const hubspotContact = await hubspot.createOrUpdateContact({
-          email: prospect.email!,
+          email: enrichedEmail, // Use enriched email from Apollo
           firstname: prospect.firstName || undefined,
           lastname: prospect.lastName || undefined,
           phone: workPhone || undefined,
@@ -88,6 +91,7 @@ export async function processApolloMatches(matches: any[]) {
           action: 'hubspot_created',
           details: {
             hubspotContactId: hubspotContact.id,
+            email: enrichedEmail,
             phone: workPhone,
             mobilePhone: mobilePhone,
           },
@@ -96,7 +100,7 @@ export async function processApolloMatches(matches: any[]) {
 
         created++;
       } catch (hubspotError: any) {
-        console.error(`Failed to create HubSpot contact for ${prospect.email}:`, hubspotError.message);
+        console.error(`Failed to create HubSpot contact for ${enrichedEmail}:`, hubspotError.message);
 
         // Mark as failed
         await db
