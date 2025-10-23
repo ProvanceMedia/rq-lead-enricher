@@ -214,10 +214,13 @@ export function QueueClient() {
 
       if (res.ok && data.success) {
         toast.success('Sent to HubSpot!', {
-          description: data.message,
+          description: data.message + ' Check the "In HubSpot" tab to see the contacts.',
         });
         setSelectedProspects(new Set());
-        await fetchDiscoveredProspects();
+
+        // Switch to In HubSpot tab to show the moved prospects
+        setActiveTab('in_hubspot');
+        await fetchHubSpotProspects();
       } else {
         toast.error('Failed to send to HubSpot', {
           description: data.error || data.message,

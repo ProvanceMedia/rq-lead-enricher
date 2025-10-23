@@ -163,38 +163,80 @@ export async function processApolloMatches(matches: any[]) {
             ['mobile', 'cell'].includes((phone.type || '').toLowerCase())
         )?.sanitized || match.mobile_phone;
 
-      const finalEmail = enrichedEmail ?? prospect.email ?? null;
+      let finalEmail = enrichedEmail ?? prospect.email ?? null;
 
       console.log(`Extracted data - Email: ${finalEmail}, Work Phone: ${workPhone}, Mobile: ${mobilePhone}`);
 
       if (!finalEmail || isPlaceholderEmail(finalEmail)) {
-        console.warn(
-          `Apollo enrichment did not return an unlocked email for ${match.id}; marking prospect as failed.`
-        );
+        // Check if Apollo says this was already revealed
+        if (match.revealed_for_current_team === true) {
+          console.log(
+            `Email was previously revealed for ${match.id}. Trying People Search API to retrieve it...`
+          );
 
-        await db
-          .update(prospects)
-          .set({
-            apolloEnrichedData: match,
-            apolloEnrichedAt: new Date(),
-            enrichmentStatus: 'failed',
-            updatedAt: new Date(),
-          })
-          .where(eq(prospects.id, prospect.id));
+          // Try to get the revealed email from People Search API by searching for this specific person
+          try {
+            const { ApolloService } = await import('./apollo');
+            const apollo = new ApolloService();
 
-        await db.insert(enrichmentActivity).values({
-          prospectId: prospect.id,
-          action: 'apollo_enrichment_failed',
-          details: {
-            apolloId: match.id,
-            reason: 'email_not_unlocked',
-          },
-          performedBy: 'apollo-webhook',
-        });
+            // Search for this exact person by name and organization
+            const searchCriteria: any = {
+              perPage: 10,
+              contactEmailStatus: ['verified'],
+            };
 
-        failed++;
-        processed++;
-        continue;
+            // Add organization search if available
+            if (match.organization?.name) {
+              searchCriteria.q_organization_name = match.organization.name;
+            }
+
+            const searchResults = await apollo.searchPeople(searchCriteria);
+
+            // Find this person in search results by Apollo ID
+            const searchMatch = searchResults.find((p: any) => p.id === match.id);
+            if (searchMatch && searchMatch.email && !searchMatch.email.includes('email_not_unlocked')) {
+              console.log(`✅ Found revealed email via People Search: ${searchMatch.email}`);
+              finalEmail = searchMatch.email;
+              // Continue with HubSpot creation below
+            } else {
+              throw new Error('Email still not found in People Search');
+            }
+          } catch (searchError) {
+            console.error(`Failed to retrieve revealed email from People Search: ${(searchError as Error).message}`);
+          }
+        }
+
+        // If still no email after trying People Search
+        if (!finalEmail || isPlaceholderEmail(finalEmail)) {
+          console.warn(
+            `Apollo enrichment did not return an unlocked email for ${match.id}; marking prospect as failed.`
+          );
+
+          await db
+            .update(prospects)
+            .set({
+              apolloEnrichedData: match,
+              apolloEnrichedAt: new Date(),
+              enrichmentStatus: 'failed',
+              updatedAt: new Date(),
+            })
+            .where(eq(prospects.id, prospect.id));
+
+          await db.insert(enrichmentActivity).values({
+            prospectId: prospect.id,
+            action: 'apollo_enrichment_failed',
+            details: {
+              apolloId: match.id,
+              reason: 'email_not_unlocked',
+              revealedForTeam: match.revealed_for_current_team || false,
+            },
+            performedBy: 'apollo-webhook',
+          });
+
+          failed++;
+          processed++;
+          continue;
+        }
       }
 
       // Update prospect with enriched data
