@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosInstance } from 'axios';
 
 const APOLLO_API_BASE = 'https://api.apollo.io/v1';
 
@@ -58,6 +58,7 @@ export interface ApolloContact {
 
 export class ApolloService {
   private apiKey: string;
+  private client: AxiosInstance;
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.APOLLO_API_KEY || '';
@@ -66,14 +67,20 @@ export class ApolloService {
         'Apollo API key is required. Please set APOLLO_API_KEY environment variable in DigitalOcean App Platform: Settings > App-Level Environment Variables'
       );
     }
+
+    this.client = axios.create({
+      baseURL: APOLLO_API_BASE,
+      headers: {
+        'X-Api-Key': this.apiKey,
+      },
+    });
   }
 
   async searchPeople(criteria: ApolloSearchCriteria): Promise<ApolloContact[]> {
     try {
-      const response = await axios.post(
-        `${APOLLO_API_BASE}/mixed_people/search`,
+      const response = await this.client.post(
+        '/mixed_people/search',
         {
-          api_key: this.apiKey,
           page: criteria.page || 1,
           per_page: criteria.perPage || 25,
           person_titles: criteria.personTitles,
@@ -99,11 +106,10 @@ export class ApolloService {
 
   async getPerson(id: string): Promise<ApolloContact | null> {
     try {
-      const response = await axios.get(
-        `${APOLLO_API_BASE}/people/match`,
+      const response = await this.client.get(
+        '/people/match',
         {
           params: {
-            api_key: this.apiKey,
             id,
           },
         }
@@ -118,10 +124,9 @@ export class ApolloService {
 
   async searchOrganizations(criteria: ApolloOrganizationSearchCriteria): Promise<ApolloOrganization[]> {
     try {
-      const response = await axios.post(
-        `${APOLLO_API_BASE}/mixed_companies/search`,
+      const response = await this.client.post(
+        '/mixed_companies/search',
         {
-          api_key: this.apiKey,
           page: criteria.page || 1,
           per_page: criteria.perPage || 25,
           organization_locations: criteria.organizationLocations,
@@ -146,11 +151,10 @@ export class ApolloService {
 
   async enrichOrganization(domain: string): Promise<ApolloOrganization | null> {
     try {
-      const response = await axios.get(
-        `${APOLLO_API_BASE}/organizations/enrich`,
+      const response = await this.client.get(
+        '/organizations/enrich',
         {
           params: {
-            api_key: this.apiKey,
             domain,
           },
         }
