@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CheckCircle, XCircle, ExternalLink, RefreshCw, Loader2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface EnrichmentWithProspect {
   enrichment: any;
@@ -82,14 +83,19 @@ export function QueueClient() {
       });
 
       if (res.ok) {
+        toast.success('Enrichment approved successfully');
         await fetchEnrichments();
       } else {
         const error = await res.json();
-        alert(`Error: ${error.error}`);
+        toast.error('Failed to approve', {
+          description: error.error,
+        });
       }
     } catch (error) {
       console.error('Error approving enrichment:', error);
-      alert('Failed to approve enrichment');
+      toast.error('Failed to approve enrichment', {
+        description: 'An unexpected error occurred. Please try again.',
+      });
     } finally {
       setProcessing(null);
     }
@@ -107,14 +113,19 @@ export function QueueClient() {
       });
 
       if (res.ok) {
+        toast.success('Enrichment rejected');
         await fetchEnrichments();
       } else {
         const error = await res.json();
-        alert(`Error: ${error.error}`);
+        toast.error('Failed to reject', {
+          description: error.error,
+        });
       }
     } catch (error) {
       console.error('Error rejecting enrichment:', error);
-      alert('Failed to reject enrichment');
+      toast.error('Failed to reject enrichment', {
+        description: 'An unexpected error occurred. Please try again.',
+      });
     } finally {
       setProcessing(null);
     }
@@ -131,14 +142,18 @@ export function QueueClient() {
 
       if (res.ok) {
         await fetchPendingProspects();
-        alert('Enrichment started successfully!');
+        toast.success('Enrichment started successfully');
       } else {
         const error = await res.json();
-        alert(`Error: ${error.error}`);
+        toast.error('Failed to start enrichment', {
+          description: error.error,
+        });
       }
     } catch (error) {
       console.error('Error enriching prospect:', error);
-      alert('Failed to enrich prospect');
+      toast.error('Failed to enrich prospect', {
+        description: 'An unexpected error occurred. Please try again.',
+      });
     } finally {
       setEnriching(prev => {
         const next = new Set(prev);
@@ -150,7 +165,9 @@ export function QueueClient() {
 
   const handleEnrichBulk = async () => {
     if (selectedProspects.size === 0) {
-      alert('Please select prospects to enrich');
+      toast.warning('No prospects selected', {
+        description: 'Please select at least one prospect to enrich',
+      });
       return;
     }
 
@@ -164,16 +181,22 @@ export function QueueClient() {
 
       if (res.ok) {
         const data = await res.json();
-        alert(`Bulk enrichment completed!\nSucceeded: ${data.succeeded}\nFailed: ${data.failed}`);
+        toast.success('Bulk enrichment completed!', {
+          description: `Succeeded: ${data.succeeded}, Failed: ${data.failed}`,
+        });
         setSelectedProspects(new Set());
         await fetchPendingProspects();
       } else {
         const error = await res.json();
-        alert(`Error: ${error.error}`);
+        toast.error('Bulk enrichment failed', {
+          description: error.error,
+        });
       }
     } catch (error) {
       console.error('Error bulk enriching:', error);
-      alert('Failed to bulk enrich prospects');
+      toast.error('Failed to bulk enrich prospects', {
+        description: 'An unexpected error occurred. Please try again.',
+      });
     } finally {
       setProcessing(null);
     }

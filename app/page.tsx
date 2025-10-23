@@ -17,6 +17,7 @@ import {
   Activity,
   ListTodo,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Stats {
   totalProspects: number;
@@ -63,18 +64,20 @@ export default function HomePage() {
       const result = await res.json();
 
       if (result.success) {
-        alert(
-          `Successfully discovered ${result.discovered} new prospects!\n` +
-          `Created: ${result.created}\n` +
-          `Duplicates skipped: ${result.duplicates}`
-        );
+        toast.success('Discovery completed!', {
+          description: `Discovered ${result.discovered} new prospects. Created: ${result.created}, Duplicates skipped: ${result.duplicates}`,
+        });
         fetchStats();
       } else {
-        alert(`Error: ${result.error}`);
+        toast.error('Discovery failed', {
+          description: result.error,
+        });
       }
     } catch (error) {
       console.error('Error triggering discovery:', error);
-      alert('Failed to trigger discovery');
+      toast.error('Failed to trigger discovery', {
+        description: 'An unexpected error occurred. Please try again.',
+      });
     } finally {
       setTriggering(false);
     }

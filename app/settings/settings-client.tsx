@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function SettingsClient() {
   const [loading, setLoading] = useState(true);
@@ -83,16 +84,20 @@ export function SettingsClient() {
             }),
           });
         } catch (error) {
-          alert('Invalid JSON in Apollo search criteria');
+          toast.error('Invalid JSON', {
+            description: 'Apollo search criteria must be valid JSON format',
+          });
           setSaving(false);
           return;
         }
       }
 
-      alert('Settings saved successfully');
+      toast.success('Settings saved successfully');
     } catch (error) {
       console.error('Error saving settings:', error);
-      alert('Failed to save settings');
+      toast.error('Failed to save settings', {
+        description: 'An unexpected error occurred. Please try again.',
+      });
     } finally {
       setSaving(false);
     }
