@@ -337,10 +337,30 @@ export class EnrichmentAgentService {
       result.addressSource = sourceMatch[1].trim();
     }
 
-    // Extract classification
+    // Extract classification and strip markdown formatting
     const classificationMatch = output.match(/CLASSIFICATION:\s*(.+)/);
     if (classificationMatch) {
-      result.classification = classificationMatch[1].trim();
+      // Strip markdown formatting (**, *, _, etc.) and trim
+      let classification = classificationMatch[1]
+        .trim()
+        .replace(/^\*\*\s*/, '')  // Remove leading **
+        .replace(/\s*\*\*$/, '')  // Remove trailing **
+        .replace(/^\*\s*/, '')    // Remove leading *
+        .replace(/\s*\*$/, '')    // Remove trailing *
+        .replace(/^_\s*/, '')     // Remove leading _
+        .replace(/\s*_$/, '')     // Remove trailing _
+        .trim();
+
+      // Validate against allowed enum values
+      const validTypes = ['Online Retailer', 'Direct Mail Agency', 'Ad Agency', 'eComm Agency', 'Marketing Agency'];
+      if (validTypes.includes(classification)) {
+        result.classification = classification;
+      } else {
+        console.warn(`Invalid company type classification: "${classification}". Using closest match or default.`);
+        // Try to find closest match (case-insensitive)
+        const match = validTypes.find(t => t.toLowerCase() === classification.toLowerCase());
+        result.classification = match || 'Marketing Agency'; // Default fallback
+      }
     }
 
     // Extract P.S. line
