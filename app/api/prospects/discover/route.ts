@@ -34,19 +34,26 @@ export async function POST(request: NextRequest) {
       personLocations: ['United Kingdom'], // Where the person lives
       organizationLocations: ['United Kingdom'], // Company HQ location
       contactEmailStatus: ['verified'],
+      page: 1,
     };
 
     let maxProspects = limit || 10;
+    let currentPage = 1;
 
     if (settingsRecord && settingsRecord.value) {
       const discoverySettings = settingsRecord.value as any as DiscoverySettings;
       searchCriteria = discoverySettings.searchCriteria;
+
+      // Get current page from settings (for pagination)
+      currentPage = (discoverySettings as any).lastSearchPage || 1;
+      searchCriteria.page = currentPage;
+
       if (!limit) {
         maxProspects = discoverySettings.dailyLimit || 10;
       }
     }
 
-    console.log(`Starting manual discovery for ${maxProspects} prospects...`);
+    console.log(`Starting manual discovery for ${maxProspects} prospects (page ${currentPage})...`);
 
     const apolloService = new ApolloService();
     const hubspotService = new HubSpotService();
@@ -120,12 +127,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Increment page number for next discovery run to avoid duplicates
+    const nextPage = currentPage + 1;
+    if (settingsRecord) {
+      const currentSettings = settingsRecord.value as any;
+      await db
+        .update(settings)
+        .set({
+          value: {
+            ...currentSettings,
+            lastSearchPage: nextPage,
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(settings.key, 'prospect_discovery'));
+
+      console.log(`Updated lastSearchPage to ${nextPage} for next discovery run`);
+    }
+
     return NextResponse.json({
       success: true,
       created: createdCount,
       skipped: skippedCount,
       errors: errors.length,
       errorDetails: errors,
+      currentPage: currentPage,
+      nextPage: nextPage,
     });
   } catch (error: any) {
     console.error('Error in manual discovery:', error);
